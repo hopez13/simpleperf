@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "5ed25d19_7b7abf84",
+        "filename": "README.md",
+        "patchSetId": 1
+      },
+      "lineNbr": 3,
+      "author": {
+        "id": 1043845
+      },
+      "writtenOn": "2016-08-12T17:33:19Z",
+      "side": 1,
+      "message": "Should wrap to 80 columns so people don\u0027t have to suffer from horizontal scrolling.",
+      "revId": "b7ee5218b87bce1fee1635ff504daf1decc2fde0",
+      "serverId": "85c56323-6fa9-3386-8a01-6480fb634889",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ed25d19_bb7367ab",
+        "filename": "README.md",
+        "patchSetId": 1
+      },
+      "lineNbr": 16,
+      "author": {
+        "id": 1043845
+      },
+      "writtenOn": "2016-08-12T17:33:19Z",
+      "side": 1,
+      "message": "The indentation here makes this a code block. I don\u0027t think that\u0027s what you wanted.",
+      "revId": "b7ee5218b87bce1fee1635ff504daf1decc2fde0",
+      "serverId": "85c56323-6fa9-3386-8a01-6480fb634889",
+      "unresolved": false
+    }
+  ]
+}
