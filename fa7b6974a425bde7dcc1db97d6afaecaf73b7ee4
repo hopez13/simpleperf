@@ -1,0 +1,9 @@
+Autosubmit+1: Dan Albert <danalbert@google.com>
+Code-Review+2: Dan Albert <danalbert@google.com>
+Verified+1: Dan Albert <danalbert@google.com>
+Presubmit-Verified+1: Treehugger Robot <treehugger-gerrit@google.com>
+Submitted-by: Treehugger Robot <treehugger-gerrit@google.com>
+Submitted-at: Tue, 16 Aug 2016 19:47:48 +0000
+Reviewed-on: https://android-review.googlesource.com/257212
+Project: platform/prebuilts/simpleperf
+Branch: refs/heads/ndk-r13-release
