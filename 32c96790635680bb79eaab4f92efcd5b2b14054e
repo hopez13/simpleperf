@@ -1,0 +1,9 @@
+Presubmit-Verified+1: Treehugger Robot <treehugger-gerrit@google.com>
+Code-Review+2: Dan Albert <danalbert@google.com>
+Autosubmit+1: Yabin Cui <yabinc@google.com>
+Verified+1: Yabin Cui <yabinc@google.com>
+Submitted-by: Treehugger Robot <treehugger-gerrit@google.com>
+Submitted-at: Mon, 22 Aug 2016 18:49:30 +0000
+Reviewed-on: https://android-review.googlesource.com/259753
+Project: platform/prebuilts/simpleperf
+Branch: refs/heads/master
