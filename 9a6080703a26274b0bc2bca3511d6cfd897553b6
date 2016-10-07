@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "dff9f4d6_8a426f64",
+        "filename": "README.md",
+        "patchSetId": 1
+      },
+      "lineNbr": 186,
+      "author": {
+        "id": 1056364
+      },
+      "writtenOn": "2016-10-07T21:13:46Z",
+      "side": 1,
+      "message": "change to space, and use $?",
+      "range": {
+        "startLine": 186,
+        "startChar": 0,
+        "endLine": 186,
+        "endChar": 2
+      },
+      "revId": "9a6080703a26274b0bc2bca3511d6cfd897553b6",
+      "serverId": "85c56323-6fa9-3386-8a01-6480fb634889",
+      "unresolved": false
+    }
+  ]
+}
