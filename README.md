@@ -185,7 +185,7 @@ interval. Below are examples.
     # system wide profiling needs root privilege
     $su 0 simpleperf stat -a --duration 10 --interval 300
 
-#### Display counter in systrce
+#### Display counters in systrace
 simpleperf can also work with systrace to dump counters in the collected trace.
 Below is an example to do a system wide stat
 
