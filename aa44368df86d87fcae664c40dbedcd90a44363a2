@@ -1,0 +1,7 @@
+Code-Review+2: Elliott Hughes <enh@google.com>
+Verified+1: Dan Albert <danalbert@google.com>
+Submitted-by: Dan Albert <danalbert@google.com>
+Submitted-at: Fri, 21 Jul 2017 17:59:44 +0000
+Reviewed-on: https://android-review.googlesource.com/437655
+Project: platform/prebuilts/simpleperf
+Branch: refs/heads/ndk-r15-release
