@@ -20,9 +20,12 @@
 
 from __future__ import print_function
 import logging
+import os
 import os.path
+import shutil
 import subprocess
 import sys
+import time
 
 def get_script_dir():
     return os.path.dirname(os.path.realpath(__file__))
@@ -30,6 +33,9 @@ def get_script_dir():
 
 def is_windows():
     return sys.platform == 'win32' or sys.platform == 'cygwin'
+
+def is_darwin():
+    return sys.platform == 'darwin'
 
 def is_python3():
     return sys.version_info >= (3, 0)
@@ -49,6 +55,12 @@ def log_warning(msg):
 
 def log_fatal(msg):
     raise Exception(msg)
+
+def log_exit(msg):
+    sys.exit(msg)
+
+def disable_debug_log():
+    logging.getLogger().setLevel(logging.WARN)
 
 def str_to_bytes(str):
     if not is_python3():
@@ -79,7 +91,7 @@ def get_host_binary_path(binary_name):
     if is_windows():
         if binary_name.endswith('.so'):
             binary_name = binary_name[0:-3] + '.dll'
-        elif binary_name.find('.') == -1:
+        elif '.' not in binary_name:
             binary_name += '.exe'
         dir = os.path.join(dir, 'windows')
     elif sys.platform == 'darwin': # OSX
@@ -95,16 +107,84 @@ def get_host_binary_path(binary_name):
     return binary_path
 
 
+def is_executable_available(executable, option='--help'):
+    """ Run an executable to see if it exists. """
+    try:
+        subproc = subprocess.Popen([executable, option], stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+        subproc.communicate()
+        return subproc.returncode == 0
+    except:
+        return False
+
+expected_tool_paths = {
+    'adb': {
+        'test_option': 'version',
+        'darwin': [(True, 'Library/Android/sdk/platform-tools/adb'),
+                   (False, '../../platform-tools/adb')],
+        'linux': [(True, 'Android/Sdk/platform-tools/adb'),
+                  (False, '../../platform-tools/adb')],
+        'windows': [(True, 'AppData/Local/Android/sdk/platform-tools/adb'),
+                    (False, '../../platform-tools/adb')],
+    },
+    'readelf': {
+        'test_option': '--help',
+        'darwin': [(True, 'Library/Android/sdk/ndk-bundle/toolchains/aarch64-linux-android-4.9/prebuilt/darwin-x86_64/bin/aarch64-linux-android-readelf'),
+                   (False, '../toolchains/aarch64-linux-android-4.9/prebuilt/darwin-x86_64/bin/aarch64-linux-android-readelf')],
+        'linux': [(True, 'Android/Sdk/ndk-bundle/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin/aarch64-linux-android-readelf'),
+                  (False, '../toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin/aarch64-linux-android-readelf')],
+        'windows': [(True, 'AppData/Local/Android/sdk/ndk-bundle/toolchains/aarch64-linux-android-4.9/prebuilt/windows-x86_64/bin/aarch64-linux-android-readelf'),
+                    (False, '../toolchains/aarch64-linux-android-4.9/prebuilt/windows-x86_64/bin/aarch64-linux-android-readelf')],
+    },
+    'addr2line': {
+        'test_option': '--help',
+        'darwin': [(True, 'Library/Android/sdk/ndk-bundle/toolchains/aarch64-linux-android-4.9/prebuilt/darwin-x86_64/bin/aarch64-linux-android-addr2line'),
+                   (False, '../toolchains/aarch64-linux-android-4.9/prebuilt/darwin-x86_64/bin/aarch64-linux-android-addr2line')],
+        'linux': [(True, 'Android/Sdk/ndk-bundle/toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin/aarch64-linux-android-addr2line'),
+                  (False, '../toolchains/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin/aarch64-linux-android-addr2line')],
+        'windows': [(True, 'AppData/Local/Android/sdk/ndk-bundle/toolchains/aarch64-linux-android-4.9/prebuilt/windows-x86_64/bin/aarch64-linux-android-addr2line'),
+                    (False, '../toolchains/aarch64-linux-android-4.9/prebuilt/windows-x86_64/bin/aarch64-linux-android-addr2line')],
+    },
+}
+
+def find_tool_path(toolname):
+    if toolname not in expected_tool_paths:
+        return None
+    test_option = expected_tool_paths[toolname]['test_option']
+    if is_executable_available(toolname, test_option):
+        return toolname
+    platform = 'linux'
+    if is_windows():
+        platform = 'windows'
+    elif is_darwin():
+        platform = 'darwin'
+    paths = expected_tool_paths[toolname][platform]
+    home = os.environ.get('HOMEPATH') if is_windows() else os.environ.get('HOME')
+    for (relative_to_home, path) in paths:
+        path = path.replace('/', os.sep)
+        if relative_to_home:
+            path = os.path.join(home, path)
+        else:
+            path = os.path.join(get_script_dir(), path)
+        if is_executable_available(path, test_option):
+            return path
+    return None
+
+
 class AdbHelper(object):
-    def __init__(self, adb_path):
+    def __init__(self, enable_switch_to_root=True):
+        adb_path = find_tool_path('adb')
+        if not adb_path:
+            log_exit("Can't find adb in PATH environment.")
         self.adb_path = adb_path
+        self.enable_switch_to_root = enable_switch_to_root
 
 
     def run(self, adb_args):
         return self.run_and_return_output(adb_args)[0]
 
 
-    def run_and_return_output(self, adb_args, stdout_file=None):
+    def run_and_return_output(self, adb_args, stdout_file=None, log_output=True):
         adb_args = [self.adb_path] + adb_args
         log_debug('run adb cmd: %s' % adb_args)
         if stdout_file:
@@ -116,9 +196,10 @@ class AdbHelper(object):
             (stdoutdata, _) = subproc.communicate()
             returncode = subproc.returncode
         result = (returncode == 0)
-        if stdoutdata:
+        if stdoutdata and adb_args[1] != 'push' and adb_args[1] != 'pull':
             stdoutdata = bytes_to_str(stdoutdata)
-            log_debug(stdoutdata)
+            if log_output:
+                log_debug(stdoutdata)
         log_debug('run adb cmd: %s  [result %s]' % (adb_args, result))
         return (result, stdoutdata)
 
@@ -126,50 +207,76 @@ class AdbHelper(object):
         self.check_run_and_return_output(adb_args)
 
 
-    def check_run_and_return_output(self, adb_args, stdout_file=None):
-        result, stdoutdata = self.run_and_return_output(adb_args, stdout_file)
+    def check_run_and_return_output(self, adb_args, stdout_file=None, log_output=True):
+        result, stdoutdata = self.run_and_return_output(adb_args, stdout_file, log_output)
         if not result:
-            log_fatal('run "adb %s" failed' % adb_args)
+            log_exit('run "adb %s" failed' % adb_args)
         return stdoutdata
 
 
+    def _unroot(self):
+        result, stdoutdata = self.run_and_return_output(['shell', 'whoami'])
+        if not result:
+            return
+        if 'root' not in stdoutdata:
+            return
+        log_info('unroot adb')
+        self.run(['unroot'])
+        self.run(['wait-for-device'])
+        time.sleep(1)
+
+
     def switch_to_root(self):
+        if not self.enable_switch_to_root:
+            self._unroot()
+            return False
         result, stdoutdata = self.run_and_return_output(['shell', 'whoami'])
         if not result:
             return False
-        if stdoutdata.find('root') != -1:
+        if 'root' in stdoutdata:
             return True
         build_type = self.get_property('ro.build.type')
         if build_type == 'user':
             return False
         self.run(['root'])
+        time.sleep(1)
+        self.run(['wait-for-device'])
         result, stdoutdata = self.run_and_return_output(['shell', 'whoami'])
-        if result and stdoutdata.find('root') != -1:
-            return True
-        return False
+        return result and 'root' in stdoutdata
 
     def get_property(self, name):
         result, stdoutdata = self.run_and_return_output(['shell', 'getprop', name])
-        if not result:
-            return None
-        return stdoutdata
-
+        return stdoutdata if result else None
 
     def set_property(self, name, value):
         return self.run(['shell', 'setprop', name, value])
 
 
-def load_config(config_file):
-    if not os.path.exists(config_file):
-        log_fatal("can't find config_file: %s" % config_file)
-    config = {}
-    if is_python3():
-        with open(config_file, 'r') as fh:
-            source = fh.read()
-            exec(source, config)
-    else:
-        execfile(config_file, config)
-    return config
+    def get_device_arch(self):
+        output = self.check_run_and_return_output(['shell', 'uname', '-m'])
+        if 'aarch64' in output:
+            return 'arm64'
+        if 'arm' in output:
+            return 'arm'
+        if 'x86_64' in output:
+            return 'x86_64'
+        if '86' in output:
+            return 'x86'
+        log_fatal('unsupported architecture: %s' % output.strip())
 
+
+def flatten_arg_list(arg_list):
+    res = []
+    if arg_list:
+        for items in arg_list:
+            res += items
+    return res
+
+
+def remove(dir_or_file):
+    if os.path.isfile(dir_or_file):
+        os.remove(dir_or_file)
+    elif os.path.isdir(dir_or_file):
+        shutil.rmtree(dir_or_file, ignore_errors=True)
 
 logging.getLogger().setLevel(logging.DEBUG)
