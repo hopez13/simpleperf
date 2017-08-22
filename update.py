@@ -16,6 +16,7 @@
 #
 """Downloads simpleperf prebuilts from the build server."""
 import argparse
+import glob
 import logging
 import os
 import shutil
@@ -114,19 +115,12 @@ def commit(branch, build, add_paths):
 def list_prebuilts():
     """List all prebuilts in current directory."""
     result = []
-    if os.path.isdir('bin'):
-        result.append('bin')
-    for item in os.listdir('.'):
-        is_prebuilt = False
-        if os.path.isfile(item):
-            if item == 'README.md':
-                is_prebuilt = True
-            elif item.endswith('.py') and item != 'update.py':
-                is_prebuilt = True
-            elif item.endswith('.config'):
-                is_prebuilt = True
-        if is_prebuilt:
-            result.append(item)
+    for d in ['bin', 'doc', 'inferno', 'testdata']:
+        if os.path.isdir(d):
+            result.append(d)
+    result += glob.glob('*.py')
+    result.remove('update.py')
+    result += ['inferno.sh', 'inferno.bat']
     return result
 
 
@@ -171,8 +165,16 @@ def install_entry(branch, build, install_dir, entry):
     shutil.move(name, install_path)
 
     if install_path.endswith('.zip'):
-        check_call(['unzip', install_path])
-        os.remove(install_path)
+        unzip_simpleperf_scripts(install_path)
+
+
+def unzip_simpleperf_scripts(zip_path):
+    check_call(['unzip', zip_path])
+    os.remove(zip_path)
+    check_call(['mv'] + glob.glob('scripts/*') + ['.'])
+    shutil.rmtree('scripts')
+    check_call(['mv'] + glob.glob('demo/*') + ['testdata'])
+    shutil.rmtree('demo')
 
 
 def install_repo_prop(branch, build):
