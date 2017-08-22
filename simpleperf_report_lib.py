@@ -83,6 +83,11 @@ class CallChainStructure(ct.Structure):
                 ('entries', ct.POINTER(CallChainEntryStructure))]
 
 
+class FeatureSectionStructure(ct.Structure):
+    _fields_ = [('data', ct.POINTER(ct.c_char)),
+                ('data_size', ct.c_uint32)]
+
+
 # convert char_p to str for python3.
 class SampleStructUsingStr(object):
     def __init__(self, sample):
@@ -155,10 +160,14 @@ class ReportLib(object):
             CallChainStructure)
         self._GetBuildIdForPathFunc = self._lib.GetBuildIdForPath
         self._GetBuildIdForPathFunc.restype = ct.c_char_p
+        self._GetFeatureSection = self._lib.GetFeatureSection
+        self._GetFeatureSection.restype = ct.POINTER(FeatureSectionStructure)
         self._instance = self._CreateReportLibFunc()
         assert(not _is_null(self._instance))
 
         self.convert_to_str = (sys.version_info >= (3, 0))
+        self.meta_info = None
+        self.current_sample = None
 
     def _load_dependent_lib(self):
         # As the windows dll is built with mingw we need to load "libwinpthread-1.dll".
@@ -195,12 +204,16 @@ class ReportLib(object):
         self._check(cond, "Failed to set kallsyms file")
 
     def GetNextSample(self):
-        sample = self._GetNextSampleFunc(self.getInstance())
-        if _is_null(sample):
-            return None
-        if self.convert_to_str:
-            return SampleStructUsingStr(sample[0])
-        return sample[0]
+        psample = self._GetNextSampleFunc(self.getInstance())
+        if _is_null(psample):
+            self.current_sample = None
+        else:
+            sample = psample[0]
+            self.current_sample = SampleStructUsingStr(sample) if self.convert_to_str else sample
+        return self.current_sample
+
+    def GetCurrentSample(self):
+        return self.current_sample
 
     def GetEventOfCurrentSample(self):
         event = self._GetEventOfCurrentSampleFunc(self.getInstance())
@@ -228,6 +241,54 @@ class ReportLib(object):
         assert(not _is_null(build_id))
         return _char_pt_to_str(build_id)
 
+    def GetRecordCmd(self):
+        if hasattr(self, "record_cmd"):
+            return self.record_cmd
+        self.record_cmd = None
+        feature_data = self._GetFeatureSection(self.getInstance(), _char_pt("cmdline"))
+        if not _is_null(feature_data):
+            void_p = ct.cast(feature_data[0].data, ct.c_void_p)
+            data_size = feature_data[0].data_size
+            arg_count = ct.cast(void_p, ct.POINTER(ct.c_uint32)).contents.value
+            void_p.value += 4
+            args = []
+            for i in range(arg_count):
+                str_len = ct.cast(void_p, ct.POINTER(ct.c_uint32)).contents.value
+                void_p.value += 4
+                char_p = ct.cast(void_p, ct.POINTER(ct.c_char))
+                current_str = ""
+                for j in range(str_len):
+                    c = bytes_to_str(char_p[j])
+                    if c != '\0':
+                        current_str += c
+                if ' ' in current_str:
+                    current_str = '"' + current_str + '"'
+                args.append(current_str)
+                void_p.value += str_len
+            self.record_cmd = " ".join(args)
+        return self.record_cmd
+
+
+    def MetaInfo(self):
+        if self.meta_info is None:
+            self.meta_info = {}
+            feature_data = self._GetFeatureSection(self.getInstance(), _char_pt("meta_info"))
+            if not _is_null(feature_data):
+                str_list = []
+                data = feature_data[0].data
+                data_size = feature_data[0].data_size
+                current_str = ""
+                for i in range(data_size):
+                    c = bytes_to_str(data[i])
+                    if c != '\0':
+                        current_str += c
+                    else:
+                        str_list.append(current_str)
+                        current_str = ""
+                for i in range(0, len(str_list), 2):
+                    self.meta_info[str_list[i]] = str_list[i + 1]
+        return self.meta_info
+
     def getInstance(self):
         if self._instance is None:
             raise Exception("Instance is Closed")
@@ -236,68 +297,3 @@ class ReportLib(object):
     def _check(self, cond, failmsg):
         if not cond:
             raise Exception(failmsg)
-
-
-class TestReportLib(unittest.TestCase):
-    def setUp(self):
-        self.perf_data_path = os.path.join(os.path.dirname(get_script_dir()),
-                                           'testdata', 'perf_with_symbols.data')
-        if not os.path.isfile(self.perf_data_path):
-            raise Exception("can't find perf_data at %s" % self.perf_data_path)
-        self.report_lib = ReportLib()
-        self.report_lib.SetRecordFile(self.perf_data_path)
-
-    def tearDown(self):
-        self.report_lib.Close()
-
-    def test_build_id(self):
-        build_id = self.report_lib.GetBuildIdForPath('/data/t2')
-        self.assertEqual(build_id, '0x70f1fe24500fc8b0d9eb477199ca1ca21acca4de')
-
-    def test_symbol_addr(self):
-        found_func2 = False
-        while True:
-            sample = self.report_lib.GetNextSample()
-            if sample is None:
-                break
-            symbol = self.report_lib.GetSymbolOfCurrentSample()
-            if symbol.symbol_name == 'func2(int, int)':
-                found_func2 = True
-                self.assertEqual(symbol.symbol_addr, 0x4004ed)
-        self.assertTrue(found_func2)
-
-    def test_sample(self):
-        found_sample = False
-        while True:
-            sample = self.report_lib.GetNextSample()
-            if sample is None:
-                break
-            if sample.ip == 0x4004ff and sample.time == 7637889424953:
-                found_sample = True
-                self.assertEqual(sample.pid, 15926)
-                self.assertEqual(sample.tid, 15926)
-                self.assertEqual(sample.thread_comm, 't2')
-                self.assertEqual(sample.cpu, 5)
-                self.assertEqual(sample.period, 694614)
-                event = self.report_lib.GetEventOfCurrentSample()
-                self.assertEqual(event.name, 'cpu-cycles')
-                callchain = self.report_lib.GetCallChainOfCurrentSample()
-                self.assertEqual(callchain.nr, 0)
-        self.assertTrue(found_sample)
-
-
-def main():
-    test_all = True
-    if len(sys.argv) > 1 and sys.argv[1] == '--test-one':
-        test_all = False
-        del sys.argv[1]
-
-    if test_all:
-        subprocess.check_call(['python', os.path.realpath(__file__), '--test-one'])
-        subprocess.check_call(['python3', os.path.realpath(__file__), '--test-one'])
-    else:
-        sys.exit(unittest.main())
-
-
-if __name__ == '__main__':
-    main()
