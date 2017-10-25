@@ -118,7 +118,7 @@ def list_prebuilts():
     for d in ['bin', 'doc', 'inferno', 'testdata']:
         if os.path.isdir(d):
             result.append(d)
-    result += glob.glob('*.py')
+    result += glob.glob('*.py') + glob.glob('*.js')
     result.remove('update.py')
     result += ['inferno.sh', 'inferno.bat']
     return result
@@ -134,9 +134,7 @@ def remove_old_release():
 
     # Need to check again because git won't remove directories if they have
     # non-git files in them.
-    for prebuilt in old_prebuilts:
-        if os.path.exists(prebuilt):
-            shutil.rmtree(prebuilt)
+    check_call(['rm', '-rf'] + old_prebuilts)
 
 
 def install_new_release(branch, build):
@@ -175,6 +173,8 @@ def unzip_simpleperf_scripts(zip_path):
     shutil.rmtree('scripts')
     check_call(['mv'] + glob.glob('demo/*') + ['testdata'])
     shutil.rmtree('demo')
+    check_call(['mv'] + glob.glob('script_testdata/*') + ['testdata'])
+    shutil.rmtree('script_testdata')
 
 
 def install_repo_prop(branch, build):

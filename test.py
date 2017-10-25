@@ -51,7 +51,7 @@ try:
 except:
     has_google_protobuf = False
 
-inferno_script = "inferno.bat" if is_windows() else "./inferno.sh"
+inferno_script = os.path.join(get_script_dir(), "inferno.bat" if is_windows() else "./inferno.sh")
 
 support_trace_offcpu = None
 
@@ -72,7 +72,9 @@ def build_testdata():
     """ Collect testdata from ../testdata and ../demo. """
     from_testdata_path = os.path.join('..', 'testdata')
     from_demo_path = os.path.join('..', 'demo')
-    if not os.path.isdir(from_testdata_path) or not os.path.isdir(from_demo_path):
+    from_script_testdata_path = 'script_testdata'
+    if (not os.path.isdir(from_testdata_path) or not os.path.isdir(from_demo_path) or
+        not from_script_testdata_path):
         return
     copy_testdata_list = ['perf_with_symbols.data', 'perf_with_trace_offcpu.data']
     copy_demo_list = ['SimpleperfExamplePureJava', 'SimpleperfExampleWithNative',
@@ -85,7 +87,8 @@ def build_testdata():
         shutil.copy(os.path.join(from_testdata_path, testdata), testdata_path)
     for demo in copy_demo_list:
         shutil.copytree(os.path.join(from_demo_path, demo), os.path.join(testdata_path, demo))
-
+    for f in os.listdir(from_script_testdata_path):
+        shutil.copy(os.path.join(from_script_testdata_path, f), testdata_path)
 
 class TestBase(unittest.TestCase):
     def run_cmd(self, args, return_output=False):
@@ -152,7 +155,7 @@ class TestExampleBase(TestBase):
         self.__class__.test_result = result
         super(TestBase, self).run(result)
 
-    def run_app_profiler(self, record_arg = "-g --duration 3 -e cpu-cycles:u",
+    def run_app_profiler(self, record_arg = "-g -f 1000 --duration 3 -e cpu-cycles:u",
                          build_binary_cache=True, skip_compile=False, start_activity=True,
                          native_lib_dir=None, profile_from_launch=False, add_arch=False):
         args = ["app_profiler.py", "--app", self.package_name, "--apk", self.apk_path,
@@ -225,12 +228,11 @@ class TestExampleBase(TestBase):
                             fulfilled[i] = True
         self.assertEqual(len(fulfilled), sum([int(x) for x in fulfilled]), fulfilled)
 
-    def check_inferno_report_html(self, check_entries):
-        file = "report.html"
+    def check_inferno_report_html(self, check_entries, file="report.html"):
         self.check_exist(file=file)
         with open(file, 'r') as fh:
             data = fh.read()
-        fulfilled = [False for x in check_entries]
+        fulfilled = [False for _ in check_entries]
         for line in data.split('\n'):
             # each entry is a (function_name, min_percentage) pair.
             for i, entry in enumerate(check_entries):
@@ -264,6 +266,7 @@ class TestExampleBase(TestBase):
         self.run_cmd(["report.py", "-i", "perf.data"])
         self.run_cmd(["report.py", "-g"])
         self.run_cmd(["report.py", "--self-kill-for-testing",  "-g", "--gui"])
+        self.run_cmd(["report_html.py"])
 
     def common_test_annotate(self):
         self.run_cmd(["annotate.py", "-h"])
@@ -279,7 +282,7 @@ class TestExampleBase(TestBase):
         self.run_cmd(["report_sample.py"])
         output = self.run_cmd(["report_sample.py", "perf.data"], return_output=True)
         self.check_strings_in_content(output, check_strings)
-        self.run_app_profiler(record_arg="-g --duration 3 -e cpu-cycles:u --no-dump-symbols")
+        self.run_app_profiler(record_arg="-g -f 1000 --duration 3 -e cpu-cycles:u --no-dump-symbols")
         output = self.run_cmd(["report_sample.py", "--symfs", "binary_cache"], return_output=True)
         self.check_strings_in_content(output, check_strings)
 
@@ -403,6 +406,21 @@ class TestExamplePureJava(TestExampleBase):
         self.run_cmd([inferno_script, "-sc"])
         self.check_inferno_report_html(
             [('com.example.simpleperf.simpleperfexamplepurejava.MainActivity$1.run()', 80)])
+        self.run_cmd([inferno_script, "-sc", "-o", "report2.html"])
+        self.check_inferno_report_html(
+            [('com.example.simpleperf.simpleperfexamplepurejava.MainActivity$1.run()', 80)],
+            "report2.html")
+        remove("report2.html")
+
+    def test_inferno_in_another_dir(self):
+        test_dir = 'inferno_testdir'
+        saved_dir = os.getcwd()
+        remove(test_dir)
+        os.mkdir(test_dir)
+        os.chdir(test_dir)
+        self.run_cmd([inferno_script])
+        os.chdir(saved_dir)
+        remove(test_dir)
 
 
 class TestExamplePureJavaRoot(TestExampleBase):
@@ -425,7 +443,7 @@ class TestExamplePureJavaTraceOffCpu(TestExampleBase):
                     ".SleepActivity")
 
     def test_smoke(self):
-        self.run_app_profiler(record_arg = "-g --duration 3 -e cpu-cycles:u --trace-offcpu")
+        self.run_app_profiler(record_arg="-g -f 1000 --duration 3 -e cpu-cycles:u --trace-offcpu")
         self.run_cmd(["report.py", "-g", "-o", "report.txt"])
         self.check_strings_in_file("report.txt",
             ["com.example.simpleperf.simpleperfexamplepurejava.SleepActivity$1.run()",
@@ -530,7 +548,7 @@ class TestExampleWithNativeTraceOffCpu(TestExampleBase):
                     ".SleepActivity")
 
     def test_smoke(self):
-        self.run_app_profiler(record_arg = "-g --duration 3 -e cpu-cycles:u --trace-offcpu")
+        self.run_app_profiler(record_arg="-g -f 1000 --duration 3 -e cpu-cycles:u --trace-offcpu")
         self.run_cmd(["report.py", "-g", "--comms", "SleepThread", "-o", "report.txt"])
         self.check_strings_in_file("report.txt",
             ["SleepThread(void*)",
@@ -578,8 +596,8 @@ class TestExampleWithNativeJniCall(TestExampleBase):
             [("MixActivity.java", 80, 0),
              ("run", 80, 0),
              ("line 26", 20, 0),
-             ("native-lib.cpp", 10, 0),
-             ("line 40", 10, 0)])
+             ("native-lib.cpp", 5, 0),
+             ("line 40", 5, 0)])
         self.run_cmd([inferno_script, "-sc"])
 
 
@@ -688,7 +706,7 @@ class TestExampleOfKotlinTraceOffCpu(TestExampleBase):
                     ".SleepActivity")
 
     def test_smoke(self):
-        self.run_app_profiler(record_arg = "-g --duration 3 -e cpu-cycles:u --trace-offcpu")
+        self.run_app_profiler(record_arg="-g -f 1000 --duration 3 -e cpu-cycles:u --trace-offcpu")
         self.run_cmd(["report.py", "-g", "-o", "report.txt"])
         self.check_strings_in_file("report.txt",
             ["void com.example.simpleperf.simpleperfexampleofkotlin.SleepActivity$createRunSleepThread$1.run()",
@@ -724,7 +742,7 @@ class TestProfilingNativeProgram(TestExampleBase):
             return
         remove("perf.data")
         self.run_cmd(["app_profiler.py", "-np", "surfaceflinger",
-                      "-r", "-g --duration 3 -e cpu-cycles:u"])
+                      "-r", "-g -f 1000 --duration 3 -e cpu-cycles:u"])
         self.run_cmd(["report.py", "-g", "-o", "report.txt"])
 
 
@@ -763,7 +781,7 @@ class TestReportLib(unittest.TestCase):
         build_id = self.report_lib.GetBuildIdForPath('/data/t2')
         self.assertEqual(build_id, '0x70f1fe24500fc8b0d9eb477199ca1ca21acca4de')
 
-    def test_symbol_addr(self):
+    def test_symbol(self):
         found_func2 = False
         while self.report_lib.GetNextSample():
             sample = self.report_lib.GetCurrentSample()
@@ -771,6 +789,7 @@ class TestReportLib(unittest.TestCase):
             if symbol.symbol_name == 'func2(int, int)':
                 found_func2 = True
                 self.assertEqual(symbol.symbol_addr, 0x4004ed)
+                self.assertEqual(symbol.symbol_len, 0x14)
         self.assertTrue(found_func2)
 
     def test_sample(self):
@@ -835,6 +854,139 @@ class TestReportLib(unittest.TestCase):
 class TestRunSimpleperfOnDevice(TestBase):
     def test_smoke(self):
         self.run_cmd(['run_simpleperf_on_device.py', 'list', '--show-features'])
+
+
+class TestTools(unittest.TestCase):
+    def test_addr2nearestline(self):
+        binary_cache_path = 'testdata'
+        test_map = {
+            '/simpleperf_runtest_two_functions_arm64': [
+                {
+                    'func_addr': 0x668,
+                    'addr': 0x668,
+                    'source': 'system/extras/simpleperf/runtest/two_functions.cpp:20',
+                },
+                {
+                    'func_addr': 0x668,
+                    'addr': 0x6a4,
+                    'source': """system/extras/simpleperf/runtest/two_functions.cpp:7
+                                 system/extras/simpleperf/runtest/two_functions.cpp:22""",
+                },
+            ],
+            '/simpleperf_runtest_two_functions_arm': [
+                {
+                    'func_addr': 0x784,
+                    'addr': 0x7b0,
+                    'source': """system/extras/simpleperf/runtest/two_functions.cpp:14
+                                 system/extras/simpleperf/runtest/two_functions.cpp:23""",
+                },
+                {
+                    'func_addr': 0x784,
+                    'addr': 0x7d0,
+                    'source': """system/extras/simpleperf/runtest/two_functions.cpp:15
+                                 system/extras/simpleperf/runtest/two_functions.cpp:23""",
+                }
+            ],
+            '/simpleperf_runtest_two_functions_x86_64': [
+                {
+                    'func_addr': 0x840,
+                    'addr': 0x840,
+                    'source': 'system/extras/simpleperf/runtest/two_functions.cpp:7',
+                },
+                {
+                    'func_addr': 0x920,
+                    'addr': 0x94a,
+                    'source': """system/extras/simpleperf/runtest/two_functions.cpp:7
+                                 system/extras/simpleperf/runtest/two_functions.cpp:22""",
+                }
+            ],
+            '/simpleperf_runtest_two_functions_x86': [
+                {
+                    'func_addr': 0x6d0,
+                    'addr': 0x6da,
+                    'source': 'system/extras/simpleperf/runtest/two_functions.cpp:14',
+                },
+                {
+                    'func_addr': 0x710,
+                    'addr': 0x749,
+                    'source': """system/extras/simpleperf/runtest/two_functions.cpp:8
+                                 system/extras/simpleperf/runtest/two_functions.cpp:22""",
+                }
+            ],
+        }
+        addr2line = Addr2Nearestline(None, binary_cache_path)
+        for dso_path in test_map:
+            test_addrs = test_map[dso_path]
+            for test_addr in test_addrs:
+                addr2line.add_addr(dso_path, test_addr['func_addr'], test_addr['addr'])
+        addr2line.convert_addrs_to_lines()
+        for dso_path in test_map:
+            dso = addr2line.get_dso(dso_path)
+            self.assertTrue(dso is not None)
+            test_addrs = test_map[dso_path]
+            for test_addr in test_addrs:
+                source_str = test_addr['source']
+                expected_source = []
+                for line in source_str.split('\n'):
+                    items = line.split(':')
+                    expected_source.append((items[0].strip(), int(items[1])))
+                actual_source = dso.get_addr_source(test_addr['addr'])
+                self.assertTrue(actual_source is not None)
+                self.assertEqual(len(actual_source), len(expected_source))
+                for i in range(len(expected_source)):
+                    actual_file_id, actual_line = actual_source[i]
+                    actual_file_path = addr2line.get_file_path(actual_file_id)
+                    self.assertEqual(actual_file_path, expected_source[i][0])
+                    self.assertEqual(actual_line, expected_source[i][1])
+
+    def test_objdump(self):
+        binary_cache_path = 'testdata'
+        test_map = {
+            '/simpleperf_runtest_two_functions_arm64': {
+                'start_addr': 0x668,
+                'len': 116,
+                'expected_items': [
+                    ('main():', 0),
+                    ('system/extras/simpleperf/runtest/two_functions.cpp:20', 0),
+                    (' 694:	add	x20, x20, #0x6de', 0x694),
+                ],
+            },
+            '/simpleperf_runtest_two_functions_arm': {
+                'start_addr': 0x784,
+                'len': 80,
+                'expected_items': [
+                    ('main():', 0),
+                    ('system/extras/simpleperf/runtest/two_functions.cpp:20', 0),
+                    ('     7ae:	bne.n	7a6 <main+0x22>', 0x7ae),
+                ],
+            },
+            '/simpleperf_runtest_two_functions_x86_64': {
+                'start_addr': 0x920,
+                'len': 201,
+                'expected_items': [
+                    ('main():', 0),
+                    ('system/extras/simpleperf/runtest/two_functions.cpp:20', 0),
+                    (' 96e:	mov    %edx,(%rbx,%rax,4)', 0x96e),
+                ],
+            },
+            '/simpleperf_runtest_two_functions_x86': {
+                'start_addr': 0x710,
+                'len': 98,
+                'expected_items': [
+                    ('main():', 0),
+                    ('system/extras/simpleperf/runtest/two_functions.cpp:20', 0),
+                    (' 748:	cmp    $0x5f5e100,%ebp', 0x748),
+                ],
+            },
+        }
+        objdump = Objdump(None, binary_cache_path)
+        for dso_path in test_map:
+            dso_info = test_map[dso_path]
+            disassemble_code = objdump.disassemble_code(dso_path, dso_info['start_addr'],
+                                                        dso_info['len'])
+            self.assertTrue(disassemble_code)
+            for item in dso_info['expected_items']:
+                self.assertTrue(item in disassemble_code)
 
 
 def main():
