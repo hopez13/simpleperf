@@ -120,7 +120,7 @@ def list_prebuilts():
             result.append(d)
     result += glob.glob('*.py')
     result.remove('update.py')
-    result += ['inferno.sh', 'inferno.bat']
+    result += ['inferno.sh', 'inferno.bat', 'report_html.js']
     return result
 
 
@@ -171,6 +171,8 @@ def install_entry(branch, build, install_dir, entry):
 def unzip_simpleperf_scripts(zip_path):
     check_call(['unzip', zip_path])
     os.remove(zip_path)
+    check_call(['mv'] + glob.glob('scripts/script_testdata/*') + ['testdata'])
+    shutil.rmtree('scripts/script_testdata')
     check_call(['mv'] + glob.glob('scripts/*') + ['.'])
     shutil.rmtree('scripts')
     check_call(['mv'] + glob.glob('demo/*') + ['testdata'])

@@ -1,4 +1,10 @@
 
+ndk r17
+Add report_html.py, reporting profiling result in html interface.
+Some improvements on inferno.
+Refactor document.
+Provide more complete dwarf based call graphs.
+
 ndk r16
 
 Add inferno, a flamegraph generator.

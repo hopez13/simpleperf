@@ -34,21 +34,18 @@ import datetime
 import os
 import subprocess
 import sys
-import webbrowser
 
-try:
-    from simpleperf_report_lib import ReportLib
-    from utils import log_exit, log_info, AdbHelper
-except:
-    print("Please go to the parent directory, and run inferno.sh or inferno.bat.")
-    sys.exit(1)
+scripts_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+sys.path.append(scripts_path)
+from simpleperf_report_lib import ReportLib
+from utils import log_exit, log_info, AdbHelper, open_report_in_browser
 
 from data_types import *
 from svg_renderer import *
 
 
 def collect_data(args):
-    app_profiler_args = [sys.executable, "app_profiler.py", "-nb"]
+    app_profiler_args = [sys.executable, os.path.join(scripts_path, "app_profiler.py"), "-nb"]
     if args.app:
         app_profiler_args += ["-p", args.app]
     elif args.native_program:
@@ -113,14 +110,17 @@ def parse_samples(process, args):
             break
         symbol = lib.GetSymbolOfCurrentSample()
         callchain = lib.GetCallChainOfCurrentSample()
-        process.get_thread(sample.tid, sample.pid).add_callchain(callchain, symbol, sample)
-        process.num_samples += 1
+        process.add_sample(sample, symbol, callchain)
 
     if process.pid == 0:
         main_threads = [thread for thread in process.threads.values() if thread.tid == thread.pid]
         if main_threads:
             process.name = main_threads[0].name
             process.pid = main_threads[0].pid
+
+    for thread in process.threads.values():
+        min_event_count = thread.num_events * args.min_callchain_percentage * 0.01
+        thread.flamegraph.trim_callchain(min_event_count)
 
     log_info("Parsed %s callchains." % process.num_samples)
 
@@ -141,15 +141,12 @@ def output_report(process, args):
     :param process: Process object
     :return: str, absolute path to the file
     """
-    f = open('report.html', 'w')
+    f = open(args.report_path, 'w')
     filepath = os.path.realpath(f.name)
-    f.write("<html>")
-    f.write("<head>")
-    f.write("""<style type="text/css">""")
-    f.write(get_local_asset_content(os.path.join("jqueryui", "jquery-ui.min.css")))
-    f.write("</style>")
-    f.write("</head>")
-    f.write("<body style='font-family: Monospace;' onload='init()'>")
+    if not args.embedded_flamegraph:
+        f.write("<html><body>")
+    f.write("<div id='flamegraph_id' style='font-family: Monospace; %s'>" % (
+            "display: none;" if args.embedded_flamegraph else ""))
     f.write("""<style type="text/css"> .s { stroke:black; stroke-width:0.5; cursor:pointer;}
             </style>""")
     f.write('<style type="text/css"> .t:hover { cursor:pointer; } </style>')
@@ -162,16 +159,19 @@ def output_report(process, args):
                       ) if args.capture_duration else ""
     f.write("""<div style='display:inline-block;'>
                   <font size='8'>
-                  Inferno Flamegraph Report</font><br/><br/>
+                  Inferno Flamegraph Report%s</font><br/><br/>
                   %s
                   Date&nbsp;&nbsp;&nbsp;&nbsp;: %s<br/>
                   Threads : %d <br/>
                   Samples : %d</br>
+                  Event count: %d</br>
                   %s""" % (
+        (': ' + args.title) if args.title else '',
         process_entry,
         datetime.datetime.now().strftime("%Y-%m-%d (%A) %H:%M:%S"),
         len(process.threads),
         process.num_samples,
+        process.num_events,
         duration_entry))
     if 'ro.product.model' in process.props:
         f.write(
@@ -184,27 +184,19 @@ def output_report(process, args):
     f.write("</div>")
     f.write("""<br/><br/>
             <div>Navigate with WASD, zoom in with SPACE, zoom out with BACKSPACE.</div>""")
-    f.write("<script>")
-    f.write(get_local_asset_content(os.path.join("jqueryui", "jquery-3.2.1.min.js")))
-    f.write(get_local_asset_content(os.path.join("jqueryui", "jquery-ui.min.js")))
-    f.write("</script>")
     f.write("<script>%s</script>" % get_local_asset_content("script.js"))
+    if not args.embedded_flamegraph:
+        f.write("<script>document.addEventListener('DOMContentLoaded', flamegraphInit);</script>")
 
-    # Output tid == pid Thread first.
-    main_thread = [x for x in process.threads.values() if x.tid == process.pid]
-    for thread in main_thread:
-        f.write("<br/><br/><b>Main Thread %d (%s) (%d samples):</b><br/>\n\n\n\n" % (
-                thread.tid, thread.name, thread.num_samples))
-        renderSVG(thread.flamegraph, f, args.color, args.svg_width)
-
-    other_threads = [x for x in process.threads.values() if x.tid != process.pid]
-    for thread in other_threads:
+    # Sort threads by the event count in a thread.
+    for thread in sorted(process.threads.values(), key=lambda x: x.num_events, reverse=True):
         f.write("<br/><br/><b>Thread %d (%s) (%d samples):</b><br/>\n\n\n\n" % (
                 thread.tid, thread.name, thread.num_samples))
-        renderSVG(thread.flamegraph, f, args.color, args.svg_width)
+        renderSVG(thread.flamegraph, f, args.color)
 
-    f.write("</body>")
-    f.write("</html>")
+    f.write("</div>")
+    if not args.embedded_flamegraph:
+        f.write("</body></html")
     f.close()
     return "file://" + filepath
 
@@ -220,20 +212,6 @@ def collect_machine_info(process):
     process.props['ro.product.model'] = adb.get_property('ro.product.model')
     process.props['ro.product.name'] = adb.get_property('ro.product.name')
     process.props['ro.product.manufacturer'] = adb.get_property('ro.product.manufacturer')
-
-
-def open_report_in_browser(report_path):
-    try:
-        # Try to open the report with Chrome
-        browser_key = ""
-        for key, value in webbrowser._browsers.items():
-            if key.find("chrome") != -1:
-                browser_key = key
-        browser = webbrowser.get(browser_key)
-        browser.open(report_path, new=0, autoraise=True)
-    except:
-        # webbrowser.get() doesn't work well on darwin/windows.
-        webbrowser.open_new_tab(report_path)
 
 
 def main():
@@ -260,7 +238,6 @@ def main():
                         instructions to profile java code. It takes some time. You can skip it
                         if the code has been compiled or you don't need to profile java code.""")
     parser.add_argument('-f', '--sample_frequency', type=int, default=6000, help='Sample frequency')
-    parser.add_argument('-w', '--svg_width', type=int, default=1124)
     parser.add_argument(
         '-du',
         '--dwarf_unwinding',
@@ -272,8 +249,18 @@ def main():
                         e.g: "10000 cpu-cyles". A few examples of event_name: cpu-cycles,
                         cache-references, cache-misses, branch-instructions, branch-misses""",
                         default="")
+    parser.add_argument('--title', help='Show a title in the report.')
     parser.add_argument('--disable_adb_root', action='store_true', help="""Force adb to run in non
                         root mode.""")
+    parser.add_argument('-o', '--report_path', default='report.html', help="Set report path.")
+    parser.add_argument('--embedded_flamegraph', action='store_true', help="""
+                        Generate embedded flamegraph.""")
+    parser.add_argument('--min_callchain_percentage', default=0.01, type=float, help="""
+                        Set min percentage of callchains shown in the report.
+                        It is used to limit nodes shown in the flamegraph. For example,
+                        when set to 0.01, only callchains taking >= 0.01%% of the event count of
+                        the owner thread are collected in the report.""")
+    parser.add_argument('--no_browser', action='store_true', help="Don't open report in browser.")
     args = parser.parse_args()
     process = Process("", 0)
 
@@ -295,9 +282,10 @@ def main():
     parse_samples(process, args)
     generate_threads_offsets(process)
     report_path = output_report(process, args)
-    open_report_in_browser(report_path)
+    if not args.no_browser:
+        open_report_in_browser(report_path)
 
-    log_info("Report generated at '%s'." % report_path)
+    log_info("Flamegraph generated at '%s'." % report_path)
 
 if __name__ == "__main__":
     main()

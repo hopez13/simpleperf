@@ -16,9 +16,18 @@
 
 import sys
 
-SVG_CANVAS_WIDTH = 1124
 SVG_NODE_HEIGHT = 17
 FONT_SIZE = 12
+
+UNZOOM_NODE_ORIGIN_X = 10
+UNZOOM_NODE_WIDTH = 80
+INFO_NODE_ORIGIN_X = 120
+INFO_NODE_WIDTH = 800
+PERCENT_NODE_ORIGIN_X = 930
+PERCENT_NODE_WIDTH = 250
+SEARCH_NODE_ORIGIN_X = 1190
+SEARCH_NODE_WIDTH = 80
+RECT_TEXT_PADDING = 10
 
 
 def hash_to_float(string):
@@ -124,52 +133,50 @@ def renderSVGNodes(flamegraph, depth, f, total_weight, height, color_scheme):
 def renderSearchNode(f):
     f.write(
         """<rect id="search_rect"  style="stroke:rgb(0,0,0);" onclick="search(this);" class="t"
-        rx="10" ry="10" x="%d" y="10" width="80" height="30" fill="rgb(255,255,255)""/>
+        rx="10" ry="10" x="%d" y="10" width="%d" height="30" fill="rgb(255,255,255)""/>
         <text id="search_text"  class="t" x="%d" y="30"    onclick="search(this);">Search</text>
-        """ % (SVG_CANVAS_WIDTH - 95, SVG_CANVAS_WIDTH - 80))
+        """ % (SEARCH_NODE_ORIGIN_X, SEARCH_NODE_WIDTH, SEARCH_NODE_ORIGIN_X + RECT_TEXT_PADDING))
 
 
 def renderUnzoomNode(f):
     f.write(
         """<rect id="zoom_rect" style="display:none;stroke:rgb(0,0,0);" class="t"
-        onclick="unzoom(this);" rx="10" ry="10" x="10" y="10" width="80" height="30"
+        onclick="unzoom(this);" rx="10" ry="10" x="%d" y="10" width="%d" height="30"
         fill="rgb(255,255,255)"/>
-         <text id="zoom_text" style="display:none;" class="t" x="19" y="30"
-         onclick="unzoom(this);">Zoom out</text>"""
-    )
+         <text id="zoom_text" style="display:none;" class="t" x="%d" y="30"
+         onclick="unzoom(this);">Zoom out</text>
+        """ % (UNZOOM_NODE_ORIGIN_X, UNZOOM_NODE_WIDTH, UNZOOM_NODE_ORIGIN_X + RECT_TEXT_PADDING))
 
 
 def renderInfoNode(f):
     f.write(
         """<clipPath id="info_clip_path"> <rect id="info_rect" style="stroke:rgb(0,0,0);"
-        rx="10" ry="10" x="120" y="10" width="%d" height="30" fill="rgb(255,255,255)"/>
+        rx="10" ry="10" x="%d" y="10" width="%d" height="30" fill="rgb(255,255,255)"/>
         </clipPath>
         <rect id="info_rect" style="stroke:rgb(0,0,0);"
-        rx="10" ry="10" x="120" y="10" width="%d" height="30" fill="rgb(255,255,255)"/>
-         <text clip-path="url(#info_clip_path)" id="info_text" x="128" y="30"></text>
-         """ % (SVG_CANVAS_WIDTH - 335, SVG_CANVAS_WIDTH - 325)
-    )
+        rx="10" ry="10" x="%d" y="10" width="%d" height="30" fill="rgb(255,255,255)"/>
+         <text clip-path="url(#info_clip_path)" id="info_text" x="%d" y="30"></text>
+         """ % (INFO_NODE_ORIGIN_X, INFO_NODE_WIDTH, INFO_NODE_ORIGIN_X, INFO_NODE_WIDTH,
+                INFO_NODE_ORIGIN_X + RECT_TEXT_PADDING))
 
 
 def renderPercentNode(f):
     f.write(
         """<rect id="percent_rect" style="stroke:rgb(0,0,0);"
-        rx="10" ry="10" x="%d" y="10" width="82" height="30" fill="rgb(255,255,255)"/>
+        rx="10" ry="10" x="%d" y="10" width="%d" height="30" fill="rgb(255,255,255)"/>
          <text  id="percent_text" text-anchor="end" x="%d" y="30">100.00%%</text>
-         """ % (SVG_CANVAS_WIDTH - (95 * 2), SVG_CANVAS_WIDTH - (125))
-    )
+        """ % (PERCENT_NODE_ORIGIN_X, PERCENT_NODE_WIDTH,
+               PERCENT_NODE_ORIGIN_X + PERCENT_NODE_WIDTH - RECT_TEXT_PADDING))
 
 
-def renderSVG(flamegraph, f, color_scheme, width):
-    global SVG_CANVAS_WIDTH
-    SVG_CANVAS_WIDTH = width
+def renderSVG(flamegraph, f, color_scheme):
     height = (flamegraph.get_max_depth() + 2) * SVG_NODE_HEIGHT
-    f.write("""<div class="flamegraph_block" style="width:%dpx; height:%dpx;">
-            """ % (SVG_CANVAS_WIDTH, height))
+    f.write("""<div class="flamegraph_block" style="width:100%%; height:%dpx;">
+            """ % height)
     f.write("""<svg xmlns="http://www.w3.org/2000/svg"
     xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1"
     width="100%%" height="100%%" style="border: 1px solid black;"
-    onload="adjust_text_size(this);" rootid="%d">
+    rootid="%d">
     """ % (flamegraph.children[0].id))
     f.write("""<defs > <linearGradient id="background_gradiant" y1="0" y2="1" x1="0" x2="0" >
     <stop stop-color="#eeeeee" offset="5%" /> <stop stop-color="#efefb1" offset="90%" />
