@@ -1,6 +1,15 @@
 
 ndk r17
+(release)
+Use new Android unwinder, which can unwind for archs different from build.
+Support profiling interpreted and JITed java code on Android >= P.
+Refactor app_profiler.py: improve option interface, simplify profiling from launch,
+and improve native lib downloading.
+Fix ndk issues 638, 644, 499, 493.
+Add debug-unwind cmd and script to debug unwinding.
+Update document, including the way using wrap.sh to profile released apk.
 
+(beta 1)
 Add report_html.py, reporting profiling result in html interface.
 Improve inferno.
 Refactor document.
