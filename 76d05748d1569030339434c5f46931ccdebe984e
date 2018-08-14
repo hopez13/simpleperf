@@ -1,0 +1,9 @@
+Code-Review+2: Yabin Cui <yabinc@google.com>
+Presubmit-Verified+1: Treehugger Robot <treehugger-gerrit@google.com>
+Verified+1: Ryan Prichard <rprichard@google.com>
+Autosubmit+1: Ryan Prichard <rprichard@google.com>
+Submitted-by: Treehugger Robot <treehugger-gerrit@google.com>
+Submitted-at: Tue, 14 Aug 2018 01:20:39 +0000
+Reviewed-on: https://android-review.googlesource.com/730868
+Project: platform/prebuilts/simpleperf
+Branch: refs/heads/ndk-release-r18
