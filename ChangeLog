@@ -14,6 +14,8 @@ Improve report_html.py:
   3) Use progressbar to show progress of loading contents.
   4) Add --binary_filter option to only annotate selected binaries.
 Export tracing data in simpleperf_report_lib.py.
+Test python scripts with both python2 and python3.
+Add document for using simpleperf in Android platform profiling.
 
 ndk r17
 (release)
