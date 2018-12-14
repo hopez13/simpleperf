@@ -1,4 +1,7 @@
 
+ndk r19
+Fix report-sample command on Windows.
+
 ndk r18
 Improve support of profiling JITed/interpreted Java code on Android >= P:
   1) Support JITed/interpreted Java code in system wide recording.

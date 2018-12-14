@@ -47,8 +47,7 @@ bin_install_list = [
     InstallEntry('sdk_arm64-sdk', 'simpleperf_host32', 'linux/x86/simpleperf', True),
     InstallEntry('sdk_mac', 'simpleperf_host', 'darwin/x86_64/simpleperf'),
     InstallEntry('sdk_mac', 'simpleperf_host32', 'darwin/x86/simpleperf'),
-    # simpleperf.exe on x86_64 windows doesn't work, use simpleperf32.exe instead.
-    InstallEntry('sdk', 'simpleperf32.exe', 'windows/x86_64/simpleperf.exe', True),
+    InstallEntry('sdk', 'simpleperf.exe', 'windows/x86_64/simpleperf.exe', True),
     InstallEntry('sdk', 'simpleperf32.exe', 'windows/x86/simpleperf.exe', True),
 
     # libsimpleperf_report.so on host
