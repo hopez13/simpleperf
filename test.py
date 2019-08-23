@@ -36,9 +36,11 @@ Test using both `adb root` and `adb unroot`.
 """
 from __future__ import print_function
 import argparse
+import collections
 import filecmp
 import fnmatch
 import inspect
+import json
 import os
 import re
 import shutil
@@ -54,7 +56,8 @@ from binary_cache_builder import BinaryCacheBuilder
 from simpleperf_report_lib import ReportLib
 from utils import log_exit, log_info, log_fatal
 from utils import AdbHelper, Addr2Nearestline, bytes_to_str, find_tool_path, get_script_dir
-from utils import is_python3, is_windows, Objdump, ReadElf, remove, SourceFileSearcher
+from utils import is_elf_file, is_python3, is_windows, Objdump, ReadElf, remove, SourceFileSearcher
+from utils import str_to_bytes
 
 try:
     # pylint: disable=unused-import
@@ -122,6 +125,21 @@ class TestBase(unittest.TestCase):
         if return_output:
             return output_data
         return ''
+
+    def check_strings_in_file(self, filename, strings):
+        self.check_exist(filename=filename)
+        with open(filename, 'r') as fh:
+            self.check_strings_in_content(fh.read(), strings)
+
+    def check_exist(self, filename=None, dirname=None):
+        if filename:
+            self.assertTrue(os.path.isfile(filename), filename)
+        if dirname:
+            self.assertTrue(os.path.isdir(dirname), dirname)
+
+    def check_strings_in_content(self, content, strings):
+        for s in strings:
+            self.assertNotEqual(content.find(s), -1, "s: %s, content: %s" % (s, content))
 
 
 class TestExampleBase(TestBase):
@@ -208,12 +226,6 @@ class TestExampleBase(TestBase):
         if build_binary_cache:
             self.check_exist(dirname="binary_cache")
 
-    def check_exist(self, filename=None, dirname=None):
-        if filename:
-            self.assertTrue(os.path.isfile(filename), filename)
-        if dirname:
-            self.assertTrue(os.path.isdir(dirname), dirname)
-
     def check_file_under_dir(self, dirname, filename):
         self.check_exist(dirname=dirname)
         for _, _, files in os.walk(dirname):
@@ -221,16 +233,6 @@ class TestExampleBase(TestBase):
                 if f == filename:
                     return
         self.fail("Failed to call check_file_under_dir(dir=%s, file=%s)" % (dirname, filename))
-
-
-    def check_strings_in_file(self, filename, strings):
-        self.check_exist(filename=filename)
-        with open(filename, 'r') as fh:
-            self.check_strings_in_content(fh.read(), strings)
-
-    def check_strings_in_content(self, content, strings):
-        for s in strings:
-            self.assertNotEqual(content.find(s), -1, "s: %s, content: %s" % (s, content))
 
     def check_annotation_summary(self, summary_file, check_entries):
         """ check_entries is a list of (name, accumulated_period, period).
@@ -648,7 +650,6 @@ class TestExampleWithNativeJniCall(TestExampleBase):
         self.run_cmd(["report.py", "-g", "--comms", "BusyThread", "-o", "report.txt"])
         self.check_strings_in_file("report.txt", [
             "com.example.simpleperf.simpleperfexamplewithnative.MixActivity$1.run",
-            "com.example.simpleperf.simpleperfexamplewithnative.MixActivity.callFunction",
             "Java_com_example_simpleperf_simpleperfexamplewithnative_MixActivity_callFunction"])
         remove("annotated_files")
         self.run_cmd(["annotate.py", "-s", self.example_path, "--comm", "BusyThread"])
@@ -1187,17 +1188,31 @@ class TestTools(unittest.TestCase):
                         'simpleperf/simpleperfexampleofkotlin/MainActivity.kt'),
             searcher.get_real_path('MainActivity.kt'))
 
+    def test_is_elf_file(self):
+        self.assertTrue(is_elf_file(os.path.join(
+            'testdata', 'simpleperf_runtest_two_functions_arm')))
+        with open('not_elf', 'wb') as fh:
+            fh.write(b'\x90123')
+        try:
+            self.assertFalse(is_elf_file('not_elf'))
+        finally:
+            remove('not_elf')
+
 
 class TestNativeLibDownloader(unittest.TestCase):
-    def test_smoke(self):
-        adb = AdbHelper()
+    def setUp(self):
+        self.adb = AdbHelper()
+        self.adb.check_run(['shell', 'rm', '-rf', '/data/local/tmp/native_libs'])
 
+    def tearDown(self):
+        self.adb.check_run(['shell', 'rm', '-rf', '/data/local/tmp/native_libs'])
+
+    def test_smoke(self):
         def is_lib_on_device(path):
-            return adb.run(['shell', 'ls', path])
+            return self.adb.run(['shell', 'ls', path])
 
         # Sync all native libs on device.
-        adb.run(['shell', 'rm', '-rf', '/data/local/tmp/native_libs'])
-        downloader = NativeLibDownloader(None, 'arm64', adb)
+        downloader = NativeLibDownloader(None, 'arm64', self.adb)
         downloader.collect_native_libs_on_host(os.path.join(
             'testdata', 'SimpleperfExampleWithNative', 'app', 'build', 'intermediates', 'cmake',
             'profiling'))
@@ -1227,17 +1242,88 @@ class TestNativeLibDownloader(unittest.TestCase):
                     self.assertTrue(build_id not in downloader.device_build_id_map)
                     self.assertFalse(is_lib_on_device(downloader.dir_on_device + name))
             if sync_count == 1:
-                adb.run(['pull', '/data/local/tmp/native_libs/build_id_list', 'build_id_list'])
+                self.adb.run(['pull', '/data/local/tmp/native_libs/build_id_list',
+                              'build_id_list'])
                 with open('build_id_list', 'rb') as fh:
                     self.assertEqual(bytes_to_str(fh.read()),
                                      '{}={}\n'.format(lib_list[0][0], lib_list[0][1].name))
                 remove('build_id_list')
-        adb.run(['shell', 'rm', '-rf', '/data/local/tmp/native_libs'])
+
+    def test_handle_wrong_build_id_list(self):
+        with open('build_id_list', 'wb') as fh:
+            fh.write(str_to_bytes('fake_build_id=binary_not_exist\n'))
+        self.adb.check_run(['shell', 'mkdir', '-p', '/data/local/tmp/native_libs'])
+        self.adb.check_run(['push', 'build_id_list', '/data/local/tmp/native_libs'])
+        remove('build_id_list')
+        downloader = NativeLibDownloader(None, 'arm64', self.adb)
+        downloader.collect_native_libs_on_device()
+        self.assertEqual(len(downloader.device_build_id_map), 0)
 
 
 class TestReportHtml(TestBase):
     def test_long_callchain(self):
-        self.run_cmd(['report_html.py', '-i', 'testdata/perf_with_long_callchain.data'])
+        self.run_cmd(['report_html.py', '-i',
+                      os.path.join('testdata', 'perf_with_long_callchain.data')])
+
+    def test_aggregated_by_thread_name(self):
+        # Calculate event_count for each thread name before aggregation.
+        event_count_for_thread_name = collections.defaultdict(lambda: 0)
+        # use "--min_func_percent 0" to avoid cutting any thread.
+        self.run_cmd(['report_html.py', '--min_func_percent', '0', '-i',
+                      os.path.join('testdata', 'aggregatable_perf1.data'),
+                      os.path.join('testdata', 'aggregatable_perf2.data')])
+        record_data = self._load_record_data_in_html('report.html')
+        event = record_data['sampleInfo'][0]
+        for process in event['processes']:
+            for thread in process['threads']:
+                thread_name = record_data['threadNames'][str(thread['tid'])]
+                event_count_for_thread_name[thread_name] += thread['eventCount']
+
+        # Check event count for each thread after aggregation.
+        self.run_cmd(['report_html.py', '--aggregate-by-thread-name',
+                      '--min_func_percent', '0', '-i',
+                      os.path.join('testdata', 'aggregatable_perf1.data'),
+                      os.path.join('testdata', 'aggregatable_perf2.data')])
+        record_data = self._load_record_data_in_html('report.html')
+        event = record_data['sampleInfo'][0]
+        hit_count = 0
+        for process in event['processes']:
+            for thread in process['threads']:
+                thread_name = record_data['threadNames'][str(thread['tid'])]
+                self.assertEqual(thread['eventCount'],
+                                 event_count_for_thread_name[thread_name])
+                hit_count += 1
+        self.assertEqual(hit_count, len(event_count_for_thread_name))
+
+    def test_no_empty_process(self):
+        """ Test not showing a process having no threads. """
+        perf_data = os.path.join('testdata', 'two_process_perf.data')
+        self.run_cmd(['report_html.py', '-i', perf_data])
+        record_data = self._load_record_data_in_html('report.html')
+        processes = record_data['sampleInfo'][0]['processes']
+        self.assertEqual(len(processes), 2)
+
+        # One process is removed because all its threads are removed for not
+        # reaching the min_func_percent limit.
+        self.run_cmd(['report_html.py', '-i', perf_data, '--min_func_percent', '20'])
+        record_data = self._load_record_data_in_html('report.html')
+        processes = record_data['sampleInfo'][0]['processes']
+        self.assertEqual(len(processes), 1)
+
+    def _load_record_data_in_html(self, html_file):
+        with open(html_file, 'r') as fh:
+            data = fh.read()
+        start_str = 'type="application/json"'
+        end_str = '</script>'
+        start_pos = data.find(start_str)
+        self.assertNotEqual(start_pos, -1)
+        start_pos = data.find('>', start_pos)
+        self.assertNotEqual(start_pos, -1)
+        start_pos += 1
+        end_pos = data.find(end_str, start_pos)
+        self.assertNotEqual(end_pos, -1)
+        json_data = data[start_pos:end_pos]
+        return json.loads(json_data)
 
 
 class TestBinaryCacheBuilder(TestBase):
@@ -1273,6 +1359,137 @@ class TestBinaryCacheBuilder(TestBase):
         self.assertTrue(filecmp.cmp(target_file, source_file))
 
 
+class TestApiProfiler(TestBase):
+    def run_api_test(self, package_name, apk_name, expected_reports, min_android_version):
+        adb = AdbHelper()
+        if adb.get_android_version() < ord(min_android_version) - ord('L') + 5:
+            log_info('skip this test on Android < %s.' % min_android_version)
+            return
+        # step 1: Prepare profiling.
+        self.run_cmd(['api_profiler.py', 'prepare'])
+        # step 2: Install and run the app.
+        apk_path = os.path.join('testdata', apk_name)
+        adb.run(['uninstall', package_name])
+        adb.check_run(['install', '-t', apk_path])
+        adb.check_run(['shell', 'am', 'start', '-n', package_name + '/.MainActivity'])
+        # step 3: Wait until the app exits.
+        time.sleep(4)
+        while True:
+            result = adb.run(['shell', 'pidof', package_name])
+            if not result:
+                break
+            time.sleep(1)
+        # step 4: Collect recording data.
+        remove('simpleperf_data')
+        self.run_cmd(['api_profiler.py', 'collect', '-p', package_name, '-o', 'simpleperf_data'])
+        # step 5: Check recording data.
+        names = os.listdir('simpleperf_data')
+        self.assertGreater(len(names), 0)
+        for name in names:
+            path = os.path.join('simpleperf_data', name)
+            remove('report.txt')
+            self.run_cmd(['report.py', '-g', '-o', 'report.txt', '-i', path])
+            self.check_strings_in_file('report.txt', expected_reports)
+        # step 6: Clean up.
+        remove('report.txt')
+        remove('simpleperf_data')
+        adb.check_run(['uninstall', package_name])
+
+    def run_cpp_api_test(self, apk_name, min_android_version):
+        self.run_api_test('simpleperf.demo.cpp_api', apk_name, ['BusyThreadFunc'],
+                          min_android_version)
+
+    def test_cpp_api_on_a_debuggable_app_targeting_prev_q(self):
+        # The source code of the apk is in simpleperf/demo/CppApi (with a small change to exit
+        # after recording).
+        self.run_cpp_api_test('cpp_api-debug_prev_Q.apk', 'N')
+
+    def test_cpp_api_on_a_debuggable_app_targeting_q(self):
+        self.run_cpp_api_test('cpp_api-debug_Q.apk', 'N')
+
+    def test_cpp_api_on_a_profileable_app_targeting_prev_q(self):
+        # a release apk with <profileable android:shell="true" />
+        self.run_cpp_api_test('cpp_api-profile_prev_Q.apk', 'Q')
+
+    def test_cpp_api_on_a_profileable_app_targeting_q(self):
+        self.run_cpp_api_test('cpp_api-profile_Q.apk', 'Q')
+
+    def run_java_api_test(self, apk_name, min_android_version):
+        self.run_api_test('simpleperf.demo.java_api', apk_name,
+                          ['simpleperf.demo.java_api.MainActivity', 'java.lang.Thread.run'],
+                          min_android_version)
+
+    def test_java_api_on_a_debuggable_app_targeting_prev_q(self):
+        # The source code of the apk is in simpleperf/demo/JavaApi (with a small change to exit
+        # after recording).
+        self.run_java_api_test('java_api-debug_prev_Q.apk', 'P')
+
+    def test_java_api_on_a_debuggable_app_targeting_q(self):
+        self.run_java_api_test('java_api-debug_Q.apk', 'P')
+
+    def test_java_api_on_a_profileable_app_targeting_prev_q(self):
+        # a release apk with <profileable android:shell="true" />
+        self.run_java_api_test('java_api-profile_prev_Q.apk', 'Q')
+
+    def test_java_api_on_a_profileable_app_targeting_q(self):
+        self.run_java_api_test('java_api-profile_Q.apk', 'Q')
+
+
+class TestPprofProtoGenerator(TestBase):
+    def setUp(self):
+        if not HAS_GOOGLE_PROTOBUF:
+            raise unittest.SkipTest(
+                'Skip test for pprof_proto_generator because google.protobuf is missing')
+
+    def run_generator(self, options=None, testdata_file='perf_with_interpreter_frames.data'):
+        testdata_path = os.path.join('testdata', testdata_file)
+        options = options or []
+        self.run_cmd(['pprof_proto_generator.py', '-i', testdata_path] + options)
+        return self.run_cmd(['pprof_proto_generator.py', '--show'], return_output=True)
+
+    def test_show_art_frames(self):
+        art_frame_str = 'art::interpreter::DoCall'
+        # By default, don't show art frames.
+        self.assertNotIn(art_frame_str, self.run_generator())
+        # Use --show_art_frames to show art frames.
+        self.assertIn(art_frame_str, self.run_generator(['--show_art_frames']))
+
+    def test_pid_filter(self):
+        key = 'PlayScene::DoFrame()'  # function in process 10419
+        self.assertIn(key, self.run_generator())
+        self.assertIn(key, self.run_generator(['--pid', '10419']))
+        self.assertIn(key, self.run_generator(['--pid', '10419', '10416']))
+        self.assertNotIn(key, self.run_generator(['--pid', '10416']))
+
+    def test_tid_filter(self):
+        key1 = 'art::ProfileSaver::Run()'  # function in thread 10459
+        key2 = 'PlayScene::DoFrame()'  # function in thread 10463
+        for options in ([], ['--tid', '10459', '10463']):
+            output = self.run_generator(options)
+            self.assertIn(key1, output)
+            self.assertIn(key2, output)
+        output = self.run_generator(['--tid', '10459'])
+        self.assertIn(key1, output)
+        self.assertNotIn(key2, output)
+        output = self.run_generator(['--tid', '10463'])
+        self.assertNotIn(key1, output)
+        self.assertIn(key2, output)
+
+    def test_comm_filter(self):
+        key1 = 'art::ProfileSaver::Run()'  # function in thread 'Profile Saver'
+        key2 = 'PlayScene::DoFrame()'  # function in thread 'e.sample.tunnel'
+        for options in ([], ['--comm', 'Profile Saver', 'e.sample.tunnel']):
+            output = self.run_generator(options)
+            self.assertIn(key1, output)
+            self.assertIn(key2, output)
+        output = self.run_generator(['--comm', 'Profile Saver'])
+        self.assertIn(key1, output)
+        self.assertNotIn(key2, output)
+        output = self.run_generator(['--comm', 'e.sample.tunnel'])
+        self.assertNotIn(key1, output)
+        self.assertIn(key2, output)
+
+
 def get_all_tests():
     tests = []
     for name, value in globals().items():
@@ -1284,12 +1501,16 @@ def get_all_tests():
     return sorted(tests)
 
 
-def run_tests(tests):
+def run_tests(tests, repeats):
     os.chdir(get_script_dir())
     build_testdata()
-    log_info('Run tests with python%d\n%s' % (3 if is_python3() else 2, '\n'.join(tests)))
     argv = [sys.argv[0]] + tests
-    unittest.main(argv=argv, failfast=True, verbosity=2, exit=False)
+    for repeat in range(repeats):
+        log_info('Run tests with python %d for %dth time\n%s' % (
+            3 if is_python3() else 2, repeat + 1, '\n'.join(tests)))
+        test_program = unittest.main(argv=argv, failfast=True, verbosity=2, exit=False)
+        if not test_program.result.wasSuccessful():
+            sys.exit(1)
 
 
 def main():
@@ -1298,6 +1519,7 @@ def main():
     parser.add_argument('--test-from', nargs=1, help='Run left tests from the selected test.')
     parser.add_argument('--python-version', choices=['2', '3', 'both'], default='both', help="""
                         Run tests on which python versions.""")
+    parser.add_argument('--repeat', type=int, nargs=1, default=[1], help='run test multiple times')
     parser.add_argument('pattern', nargs='*', help='Run tests matching the selected pattern.')
     args = parser.parse_args()
     tests = get_all_tests()
@@ -1338,7 +1560,7 @@ def main():
             argv += ['--python-version', str(version)]
             subprocess.check_call(argv)
         else:
-            run_tests(tests)
+            run_tests(tests, args.repeat[0])
 
 
 if __name__ == '__main__':
