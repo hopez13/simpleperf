@@ -70,6 +70,17 @@ def log_exit(msg):
 def disable_debug_log():
     logging.getLogger().setLevel(logging.WARN)
 
+def set_log_level(level_name):
+    if level_name == 'debug':
+        level = logging.DEBUG
+    elif level_name == 'info':
+        level = logging.INFO
+    elif level_name == 'warning':
+        level = logging.WARNING
+    else:
+        log_fatal('unknown log level: %s' % level_name)
+    logging.getLogger().setLevel(level)
+
 def str_to_bytes(str_value):
     if not is_python3():
         return str_value
@@ -363,9 +374,7 @@ def open_report_in_browser(report_path):
 def is_elf_file(path):
     if os.path.isfile(path):
         with open(path, 'rb') as fh:
-            data = fh.read(4)
-            if len(data) == 4 and bytes_to_str(data) == '\x7fELF':
-                return True
+            return fh.read(4) == b'\x7fELF'
     return False
 
 def find_real_dso_path(dso_path_in_record_file, binary_cache_path):
