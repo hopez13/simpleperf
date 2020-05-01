@@ -2,29 +2,33 @@
 
 ## Table of Contents
 
-- [How simpleperf works](#how-simpleperf-works)
-- [Commands](#commands)
-- [The list command](#the-list-command)
-- [The stat command](#the-stat-command)
+- [Executable commands reference](#executable-commands-reference)
+  - [Table of Contents](#table-of-contents)
+  - [How simpleperf works](#how-simpleperf-works)
+  - [Commands](#commands)
+  - [The list command](#the-list-command)
+  - [The stat command](#the-stat-command)
     - [Select events to stat](#select-events-to-stat)
     - [Select target to stat](#select-target-to-stat)
     - [Decide how long to stat](#decide-how-long-to-stat)
     - [Decide the print interval](#decide-the-print-interval)
     - [Display counters in systrace](#display-counters-in-systrace)
-- [The record command](#the-record-command)
+    - [Show event count per thread](#show-event-count-per-thread)
+    - [Show event count per core](#show-event-count-per-core)
+  - [The record command](#the-record-command)
     - [Select events to record](#select-events-to-record)
     - [Select target to record](#select-target-to-record)
     - [Set the frequency to record](#set-the-frequency-to-record)
     - [Decide how long to record](#decide-how-long-to-record)
     - [Set the path to store profiling data](#set-the-path-to-store-profiling-data)
-    - [Record call graphs](#record-call-graphs)
+      - [Record call graphs](#record-call-graphs)
     - [Record both on CPU time and off CPU time](#record-both-on-cpu-time-and-off-cpu-time)
-- [The report command](#the-report-command)
+  - [The report command](#the-report-command)
     - [Set the path to read profiling data](#set-the-path-to-read-profiling-data)
     - [Set the path to find binaries](#set-the-path-to-find-binaries)
     - [Filter samples](#filter-samples)
     - [Group samples into sample entries](#group-samples-into-sample-entries)
-    - [Report call graphs](#report-call-graphs)
+      - [Report call graphs](#report-call-graphs)
 
 
 ## How simpleperf works
@@ -262,6 +266,62 @@ $ su 0 simpleperf stat -e instructions:k,cache-misses -a --interval 300 --durati
 # Open the collected new.html in browser and perf counters will be shown up.
 ```
 
+### Show event count per thread
+
+By default, stat cmd outputs an event count sum for all monitored targets. But when `--per-thread`
+option is used, stat cmd outputs an event count for each thread in monitored targets. It can be
+used to find busy threads in a process or system wide. With `--per-thread` option, stat cmd opens
+a perf_event_file for each exisiting thread. If a monitored thread creates new threads, event
+count for new threads will be added to the monitored thread by default, otherwise omitted if
+`--no-inherit` option is also used.
+
+```sh
+# Print event counts for each thread in process 11904. Event counts for threads created after
+# stat cmd will be added to threads creating them.
+$ simpleperf stat --per-thread -p 11904 --duration 1
+
+# Print event counts for all threads running in the system every 1s. Threads not running will not
+# be reported.
+$ su 0 simpleperf stat --per-thread -a --interval 1000 --interval-only-values
+
+# Print event counts for all threads running in the system every 1s. Event counts for threads
+# created after stat cmd will be omitted.
+$ su 0 simpleperf stat --per-thread -a --interval 1000 --interval-only-values --no-inherit
+```
+
+### Show event count per core
+
+By default, stat cmd outputs an event count sum for all monitored cpu cores. But when `--per-core`
+option is used, stat cmd outputs an event count for each core. It can be used to see how events
+are distributed on different cores.
+When stating non-system wide with `--per-core` option, simpleperf creates a perf event for each
+monitored thread on each core. When a thread is in running state, perf events on all cores are
+enabled, but only the perf event on the core running the thread is in running state. So the
+percentage comment shows runtime_on_a_core / runtime_on_all_cores. Note that, percentage is still
+affected by hardware counter multiplexing. Check simpleperf log output for ways to distinguish it.
+
+```sh
+# Print event counts for each cpu running threads in process 11904.
+# A percentage shows runtime_on_a_cpu / runtime_on_all_cpus.
+$ simpleperf stat --per-core -p 11904 --duration 1
+Performance counter statistics:
+
+# cpu       count  event_name   # percentage = event_run_time / enabled_time
+  7    56,552,838  cpu-cycles   #   (60%)
+  3    25,958,605  cpu-cycles   #   (20%)
+  0    22,822,698  cpu-cycles   #   (15%)
+  1     6,661,495  cpu-cycles   #   (5%)
+  4     1,519,093  cpu-cycles   #   (0%)
+
+Total test time: 1.001082 seconds.
+
+# Print event counts for each cpu system wide.
+$ su 0 simpleperf stat --per-core -a --duration 1
+
+# Print cpu-cycle event counts for each cpu for each thread running in the system.
+$ su 0 simpleperf stat -e cpu-cycles -a --per-thread --per-core --duration 1
+```
+
 ## The record command
 
 The record command is used to dump samples of the profiled processes. Each sample can contain
@@ -425,6 +485,9 @@ on timestamps, including both on CPU time and off CPU time.
 trace-offcpu is implemented using sched:sched_switch tracepoint event, which may not be supported
 on old kernels. But it is guaranteed to be supported on devices >= Android O MR1. We can check
 whether trace-offcpu is supported as below.
+
+trace-offcpu only works with recording one of events: cpu-cycles, cpu-clock, task-clock. Using it
+with other events or multiple events doesn't make much sense and makes the report confusing.
 
 ```sh
 $ simpleperf list --show-features

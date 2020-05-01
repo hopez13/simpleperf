@@ -1,4 +1,30 @@
 
+ndk r22
+build 6401870
+Support multiple record files in pprof_proto_generator.py.
+In stat cmd, add --per-thread and --per-core options to report per thread and per core.
+In record cmd, add --exclude-perf option to exclude simpleperf samples in system wide
+recording.
+In inject cmd, support decoding coresight etm data to branch list data in protobuf format.
+Fix and add doc for app_api, which can control simpleperf recording in app code.
+Support pmu event types:
+  list supported pmu events via `simpleperf list pmu`.
+  record/stat pmu events via options like -e armv8_pmuv3/cpu_cycles/.
+Switch to llvm-objdump.
+Add doc for line and disassembly annotation in README.md.
+
+ndk r21
+In record cmd, support recording coresight etm data (via -e cs-etm option).
+Add inject cmd to decode coresight etm data.
+Add doc for downloading unstripped libraries on device.
+Fix scripts for using unstripped libraries without build ids for reporting.
+Switch to llvm-symbolizer.
+Add app_api and api_profiler.py, which can control simpleperf recording in app code.
+Fix pprof_proto_generator.py to support line and disassembly annotation via pprof.
+
+ndk r20
+Skipped.
+
 ndk r19
 Fix report-sample command on Windows.
 
