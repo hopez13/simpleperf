@@ -13,6 +13,7 @@ Support pmu event types:
 Switch to llvm-objdump.
 Add doc for line and disassembly annotation in README.md.
 Add doc for profiling profileable release app on Android >= Q.
+Remove dependency on libncurses.
 
 ndk r21
 In record cmd, support recording coresight etm data (via -e cs-etm option).
