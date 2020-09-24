@@ -1,4 +1,15 @@
 
+build 6859468
+Add --csv option in report cmd.
+Add --sort option in stat cmd.
+Add --tp-filter option to filter tracepoint events in record cmd.
+Add --addr-filter to filter etm recording in record cmd.
+Fix finding symbols from kernel modules.
+Better ART JIT support (dump jit symfiles to a single file instead of multiple
+temporary files).
+Support generic JIT symbols from symbol map file. See doc/jit_symbols.md.
+
+
 ndk r22
 build 6401870
 Support multiple record files in pprof_proto_generator.py.
