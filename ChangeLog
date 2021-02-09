@@ -1,4 +1,19 @@
 
+build 7119240
+Reduce prepare recording time.
+Add --kprobe option in record cmd.
+Add --cpu option in report cmd.
+Add -i option in dump cmd.
+Add --exclude-perf option in inject cmd.
+Add merge cmd to merge recording files recorded in the same environment using
+the same event types.
+Add monitor cmd to record and report events in real time.
+Fix a few bugs about symbolization of kernel and kernel modules.
+Support parsing kernel etm data in inject cmd.
+Add --show-execution-type option in report-sample cmd.
+Don't hide art jni methods in report_lib and report-sample cmd.
+
+
 build 6859468
 Add --csv option in report cmd.
 Add --sort option in stat cmd.
