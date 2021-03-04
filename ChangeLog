@@ -1,4 +1,8 @@
 
+build 7173446
+Add visualization tool purgatorio.
+Switch to llvm-objdump and llvm-readelf.
+
 build 7119240
 Reduce prepare recording time.
 Add --kprobe option in record cmd.
