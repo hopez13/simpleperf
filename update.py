@@ -138,7 +138,7 @@ def commit(branch, build, add_paths):
 def list_prebuilts():
     """List all prebuilts in current directory."""
     result = []
-    for d in ['bin', 'doc', 'inferno', 'testdata', 'app_api']:
+    for d in ['bin', 'doc', 'inferno', 'testdata', 'app_api', 'purgatorio']:
         if os.path.isdir(d):
             result.append(d)
     result += glob.glob('*.py') + glob.glob('*.js')
