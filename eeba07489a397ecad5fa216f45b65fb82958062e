@@ -16,6 +16,23 @@
       "message": "ps2: remove Android.bp.",
       "revId": "eeba07489a397ecad5fa216f45b65fb82958062e",
       "serverId": "85c56323-6fa9-3386-8a01-6480fb634889"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8055b7b6_2cdabc70",
+        "filename": "update.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 1010056
+      },
+      "writtenOn": "2021-03-30T23:56:42Z",
+      "side": 1,
+      "message": "Do you want something similar to what we do for the toolchain where we use the prebuilt python3? If not now, it might be a useful thing to clean up and standardize.",
+      "revId": "eeba07489a397ecad5fa216f45b65fb82958062e",
+      "serverId": "85c56323-6fa9-3386-8a01-6480fb634889"
     }
   ]
 }
