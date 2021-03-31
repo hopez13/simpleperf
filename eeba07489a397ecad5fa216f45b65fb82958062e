@@ -33,6 +33,24 @@
       "message": "Do you want something similar to what we do for the toolchain where we use the prebuilt python3? If not now, it might be a useful thing to clean up and standardize.",
       "revId": "eeba07489a397ecad5fa216f45b65fb82958062e",
       "serverId": "85c56323-6fa9-3386-8a01-6480fb634889"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "dbb9be21_bf0716cd",
+        "filename": "update.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 1056364
+      },
+      "writtenOn": "2021-03-31T00:12:03Z",
+      "side": 1,
+      "message": "I feel no need to switch: Unlike build.py in llvm_android, we only run update.py locally on linux, which has update-to-date python3.",
+      "parentUuid": "8055b7b6_2cdabc70",
+      "revId": "eeba07489a397ecad5fa216f45b65fb82958062e",
+      "serverId": "85c56323-6fa9-3386-8a01-6480fb634889"
     }
   ]
 }
