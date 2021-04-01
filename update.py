@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2016 The Android Open Source Project
 #
@@ -19,9 +19,13 @@ import argparse
 import glob
 import logging
 import os
+from pathlib import Path
+import shlex
 import shutil
 import stat
+import subprocess
 import textwrap
+from typing import List, Union
 
 
 THIS_DIR = os.path.realpath(os.path.dirname(__file__))
@@ -61,9 +65,6 @@ bin_install_list = [
     InstallEntry('MODULES-IN-system-extras-simpleperf',
                  'simpleperf/windows/x86_64/simpleperf_ndk64.exe',
                  'windows/x86_64/simpleperf.exe', True),
-    InstallEntry('MODULES-IN-system-extras-simpleperf',
-                 'simpleperf/windows/x86/simpleperf_ndk.exe',
-                 'windows/x86/simpleperf.exe', True),
 
     # libsimpleperf_report.so on host
     InstallEntry('MODULES-IN-system-extras-simpleperf',
@@ -75,21 +76,15 @@ bin_install_list = [
     InstallEntry('MODULES-IN-system-extras-simpleperf',
                  'simpleperf/windows/x86_64/libsimpleperf_report.dll',
                  'windows/x86_64/libsimpleperf_report.dll', True),
-    InstallEntry('MODULES-IN-system-extras-simpleperf',
-                 'simpleperf/windows/x86/libsimpleperf_report.dll',
-                 'windows/x86/libsimpleperf_report.dll', True),
 
     # libwinpthread-1.dll on windows host
     InstallEntry(MINGW + '/bin/libwinpthread-1.dll', 'libwinpthread-1.dll',
                  'windows/x86_64/libwinpthread-1.dll', False),
-    InstallEntry(MINGW + '/lib32/libwinpthread-1.dll',
-                 'libwinpthread-1_32.dll',
-                 'windows/x86/libwinpthread-1.dll',
-                 False),
 ]
 
 script_install_entry = InstallEntry(
-    'MODULES-IN-system-extras-simpleperf', 'simpleperf/simpleperf_script.zip', 'simpleperf_script.zip')
+    'MODULES-IN-system-extras-simpleperf', 'simpleperf/simpleperf_script.zip',
+    'simpleperf_script.zip')
 
 
 def logger():
@@ -97,11 +92,23 @@ def logger():
     return logging.getLogger(__name__)
 
 
-def check_call(cmd):
+def check_call(cmd: Union[str, List[str]]):
     """Proxy for subprocess.check_call with logging."""
-    import subprocess
-    logger().debug('check_call `%s`', ' '.join(cmd))
-    subprocess.check_call(cmd)
+    if isinstance(cmd, list):
+        cmd = shlex.join(cmd)
+    logger().debug('check_call `%s`', cmd)
+    subprocess.run(cmd, shell=True, check=True)
+
+
+def remove(path: Union[str, Path]):
+    if isinstance(path, str):
+        path = Path(path)
+    if not path.exists():
+        return
+    if path.is_dir():
+        shutil.rmtree(path.as_posix())
+    else:
+        path.unlink()
 
 
 def fetch_artifact(branch, build, target, pattern):
@@ -135,10 +142,10 @@ def commit(branch, build, add_paths):
     check_call(['git', 'commit', '-m', message])
 
 
-def list_prebuilts():
+def list_prebuilts() -> List[str]:
     """List all prebuilts in current directory."""
     result = []
-    for d in ['bin', 'doc', 'inferno', 'testdata', 'app_api', 'purgatorio']:
+    for d in ['app_api', 'bin', 'doc', 'inferno', 'purgatorio', 'test', 'testdata']:
         if os.path.isdir(d):
             result.append(d)
     result += glob.glob('*.py') + glob.glob('*.js')
@@ -157,7 +164,8 @@ def remove_old_release():
 
     # Need to check again because git won't remove directories if they have
     # non-git files in them.
-    check_call(['rm', '-rf'] + old_prebuilts)
+    for prebuilt in old_prebuilts:
+        remove(prebuilt)
 
 
 def install_new_release(branch, build):
@@ -165,6 +173,7 @@ def install_new_release(branch, build):
     for entry in bin_install_list:
         install_entry(branch, build, 'bin', entry)
     install_entry(branch, build, '.', script_install_entry)
+    unzip_simpleperf_scripts(script_install_entry.install_path)
     install_repo_prop(branch, build)
 
 
@@ -186,19 +195,25 @@ def install_entry(branch, build, install_dir, entry):
         os.makedirs(dir)
     shutil.move(name, install_path)
 
-    if install_path.endswith('.zip'):
-        unzip_simpleperf_scripts(install_path)
 
+def unzip_simpleperf_scripts(zip_path: str):
+    check_call('unzip %s' % zip_path)
+    remove(zip_path)
 
-def unzip_simpleperf_scripts(zip_path):
-    check_call(['unzip', zip_path])
-    os.remove(zip_path)
-    check_call(['mv'] + glob.glob('scripts/*') + ['.'])
-    shutil.rmtree('scripts')
-    check_call(['mv'] + glob.glob('demo/*') + ['testdata'])
-    shutil.rmtree('demo')
-    check_call(['mv'] + glob.glob('script_testdata/*') + ['testdata'])
-    shutil.rmtree('script_testdata')
+    # Move scripts.
+    for sub_path in Path('scripts').iterdir():
+        if sub_path.name not in ['bin', 'pylintrc', 'update.py']:
+            shutil.move(sub_path, '.')
+    remove('scripts')
+    remove('inferno/Android.bp')
+
+    # Build testdata.
+    testdata_dir = Path('test/testdata')
+    testdata_dir.mkdir()
+    for source_dir in ['demo', 'testdata', 'test/script_testdata']:
+        for sub_path in Path(source_dir).iterdir():
+            shutil.move(sub_path, testdata_dir)
+        remove(source_dir)
 
 
 def install_repo_prop(branch, build):
