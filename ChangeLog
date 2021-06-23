@@ -1,4 +1,20 @@
 
+build 7414587
+Drop python2 support, scripts are tested on python3.8 and python3.9.
+Refactor debug unwinding:
+  1. Add --keep-failed-unwinding-result and --keep-failed-unwinding-stack options
+     in record cmd, to generate additional records for failed unwinding cases.
+  2. Refactor debug-unwind cmd and debug_unwind_reporter.py to report failed
+     unwinding cases.
+Support recording and converting kernel ETM data in record cmd and inject cmd.
+Support using proguard mapping file for reporting.
+Support vmlinux file when building binary_cache.
+Support showing disassembly of vmlinux file in report_html.py. Use multithreading
+to speedup disassembling.
+Add app_type, android_sdk_version and android_build_type in meta_info of recording file.
+
+
+ndk r23
 build 7173446
 Add visualization tool purgatorio.
 Switch to llvm-objdump and llvm-readelf.
