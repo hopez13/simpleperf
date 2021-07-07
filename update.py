@@ -210,11 +210,11 @@ def unzip_simpleperf_scripts(zip_path: str):
     # Build testdata.
     testdata_dir = Path('test/testdata')
     testdata_dir.mkdir()
-    for source_dir in ['demo', 'testdata', 'test/script_testdata']:
+    for source_dir in ['demo', 'runtest', 'testdata', 'test/script_testdata']:
         for sub_path in Path(source_dir).iterdir():
             shutil.move(sub_path, testdata_dir)
         remove(source_dir)
-
+    remove(testdata_dir / 'Android.bp')
 
 def install_repo_prop(branch, build):
     """Installs the repo.prop from the build for auditing."""
