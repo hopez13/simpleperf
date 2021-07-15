@@ -1,4 +1,11 @@
 
+build 7549687
+Use multithreading to speed up line annotation.
+Add doc/debug_dwarf_unwinding.md.
+Add doc/collect_etm_data_for_autofdo.md.
+Move to file2 feature section.
+
+
 build 7414587
 Drop python2 support, scripts are tested on python3.8 and python3.9.
 Refactor debug unwinding:
