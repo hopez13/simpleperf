@@ -45,7 +45,7 @@ bin_install_list = [
     InstallEntry('MODULES-IN-system-extras-simpleperf',
                  'simpleperf/android/arm64/simpleperf_ndk64',
                  'android/arm64/simpleperf'),
-    InstallEntry('MODULES-IN-system-extras-simpleperf',
+    InstallEntry('MODULES-IN-system-extras-simpleperf_arm',
                  'simpleperf/android/arm/simpleperf_ndk',
                  'android/arm/simpleperf'),
     InstallEntry('MODULES-IN-system-extras-simpleperf_x86',

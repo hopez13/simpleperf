@@ -1,4 +1,10 @@
 
+build 7649958
+Build arm simpleperf for armv7-neon instead of armv8.
+Support JIT method name with signature.
+Doc improvement.
+
+
 build 7549687
 Use multithreading to speed up line annotation.
 Add doc/debug_dwarf_unwinding.md.

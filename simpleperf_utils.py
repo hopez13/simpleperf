@@ -363,8 +363,8 @@ class AdbHelper(object):
             return
         log_info('unroot adb')
         self.run(['unroot'])
-        time.sleep(1)
         self.run(['wait-for-device'])
+        time.sleep(1)
 
     def switch_to_root(self) -> bool:
         if not self.enable_switch_to_root:
