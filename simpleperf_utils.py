@@ -30,7 +30,10 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Dict, Iterator, List, Optional, Set, Union
+from typing import Dict, Iterator, List, Optional, Set, Tuple, Union
+
+
+NDK_ERROR_MESSAGE = "Please install the Android NDK (https://developer.android.com/studio/projects/install-ndk), then set NDK path with --ndk_path option."
 
 
 def get_script_dir() -> str:
@@ -53,49 +56,7 @@ def get_platform() -> str:
     return 'linux'
 
 
-def is_python3() -> str:
-    return sys.version_info >= (3, 0)
-
-
-def log_debug(msg: str):
-    logging.debug(msg)
-
-
-def log_info(msg: str):
-    logging.info(msg)
-
-
-def log_warning(msg: str):
-    logging.warning(msg)
-
-
-def log_fatal(msg: str):
-    raise Exception(msg)
-
-
-def log_exit(msg: str):
-    sys.exit(msg)
-
-
-def disable_debug_log():
-    logging.getLogger().setLevel(logging.WARN)
-
-
-def set_log_level(level_name: str):
-    if level_name == 'debug':
-        level = logging.DEBUG
-    elif level_name == 'info':
-        level = logging.INFO
-    elif level_name == 'warning':
-        level = logging.WARNING
-    else:
-        log_fatal('unknown log level: %s' % level_name)
-    logging.getLogger().setLevel(level)
-
-
 def str_to_bytes(str_value: str) -> bytes:
-    if not is_python3():
-        return str_value
     # In python 3, str are wide strings whereas the C api expects 8 bit strings,
     # hence we have to convert. For now using utf-8 as the encoding.
     return str_value.encode('utf-8')
@@ -104,8 +65,6 @@ def str_to_bytes(str_value: str) -> bytes:
 def bytes_to_str(bytes_value: Optional[bytes]) -> str:
     if not bytes_value:
         return ''
-    if not is_python3():
-        return bytes_value
     return bytes_value.decode('utf-8')
 
 
@@ -182,11 +141,10 @@ class ToolFinder:
             'path_in_ndk':
                 lambda platform: 'toolchains/llvm/prebuilt/%s-x86_64/bin/llvm-symbolizer' % platform,
         },
-        'objdump': {
-            'is_binutils': True,
-        },
-        'strip': {
-            'is_binutils': True,
+        'llvm-strip': {
+            'is_binutils': False,
+            'path_in_ndk':
+                lambda platform: 'toolchains/llvm/prebuilt/%s-x86_64/bin/llvm-strip' % platform,
         },
     }
 
@@ -326,7 +284,7 @@ class AdbHelper(object):
     def run_and_return_output(self, adb_args: List[str], log_output: bool = False,
                               log_stderr: bool = False) -> Tuple[bool, str]:
         adb_args = [self.adb_path] + adb_args
-        log_debug('run adb cmd: %s' % adb_args)
+        logging.debug('run adb cmd: %s' % adb_args)
         env = None
         if self.serial_number:
             env = os.environ.copy()
@@ -339,10 +297,10 @@ class AdbHelper(object):
         returncode = subproc.returncode
         result = (returncode == 0)
         if log_output and stdout_data:
-            log_debug(stdout_data)
+            logging.debug(stdout_data)
         if log_stderr and stderr_data:
-            log_warning(stderr_data)
-        log_debug('run adb cmd: %s  [result %s]' % (adb_args, result))
+            logging.warning(stderr_data)
+        logging.debug('run adb cmd: %s  [result %s]' % (adb_args, result))
         return (result, stdout_data)
 
     def check_run(self, adb_args: List[str], log_output: bool = False):
@@ -361,10 +319,10 @@ class AdbHelper(object):
             return
         if 'root' not in stdoutdata:
             return
-        log_info('unroot adb')
+        logging.info('unroot adb')
         self.run(['unroot'])
-        self.run(['wait-for-device'])
         time.sleep(1)
+        self.run(['wait-for-device'])
 
     def switch_to_root(self) -> bool:
         if not self.enable_switch_to_root:
@@ -574,7 +532,7 @@ class Addr2Nearestline(object):
             binary_finder: BinaryFinder, with_function_name: bool):
         self.symbolizer_path = ToolFinder.find_tool_path('llvm-symbolizer', ndk_path)
         if not self.symbolizer_path:
-            log_exit("Can't find llvm-symbolizer. Please set ndk path with --ndk_path option.")
+            log_exit("Can't find llvm-symbolizer. " + NDK_ERROR_MESSAGE)
         self.readelf = ReadElf(ndk_path)
         self.dso_map: Dict[str, Addr2Nearestline.Dso] = {}  # map from dso_path to Dso.
         self.binary_finder = binary_finder
@@ -600,11 +558,11 @@ class Addr2Nearestline(object):
         real_path = self.binary_finder.find_binary(dso_path, dso.build_id)
         if not real_path:
             if dso_path not in ['//anon', 'unknown', '[kernel.kallsyms]']:
-                log_debug("Can't find dso %s" % dso_path)
+                logging.debug("Can't find dso %s" % dso_path)
             return
 
         if not self._check_debug_line_section(real_path):
-            log_debug("file %s doesn't contain .debug_line section." % real_path)
+            logging.debug("file %s doesn't contain .debug_line section." % real_path)
             return
 
         addr_step = self._get_addr_step(real_path)
@@ -651,38 +609,7 @@ class Addr2Nearestline(object):
             stdoutdata = bytes_to_str(stdoutdata)
         except OSError:
             return
-        addr_map: Dict[int, List[Tuple[int]]] = {}
-        cur_line_list: Optional[List[Tuple[int]]] = None
-        need_function_name = self.with_function_name
-        cur_function_name: Optional[str] = None
-        for line in stdoutdata.strip().split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-            if line[:2] == '0x':
-                # a new address
-                cur_line_list = addr_map[int(line, 16)] = []
-            elif need_function_name:
-                cur_function_name = line.strip()
-                need_function_name = False
-            else:
-                need_function_name = self.with_function_name
-                if cur_line_list is None:
-                    continue
-                file_path, line_number = self._parse_source_location(line)
-                if not file_path or not line_number:
-                    # An addr can have a list of (file, line), when the addr belongs to an inlined
-                    # function. Sometimes only part of the list has ? mark. In this case, we think
-                    # the line info is valid if the first line doesn't have ? mark.
-                    if not cur_line_list:
-                        cur_line_list = None
-                    continue
-                file_id = dso.get_file_id(file_path)
-                if self.with_function_name:
-                    func_id = dso.get_func_id(cur_function_name)
-                    cur_line_list.append((file_id, line_number, func_id))
-                else:
-                    cur_line_list.append((file_id, line_number))
+        addr_map = self.parse_line_output(stdoutdata, dso)
 
         # 3. Fill line info in dso.addrs.
         for addr in dso.addrs:
@@ -706,7 +633,66 @@ class Addr2Nearestline(object):
             args.append('--functions=none')
         return args
 
-    def _parse_source_location(self, line: str) -> Tuple[Optional[str], Optional[int]]:
+    def parse_line_output(self, output: str, dso: Addr2Nearestline.Dso) -> Dict[int,
+                                                                                List[Tuple[int]]]:
+        """
+        The output is a list of lines.
+            address1
+            function_name1 (the function name can be empty)
+            source_location1
+            function_name2
+            source_location2
+            ...
+            (end with empty line)
+        """
+
+        addr_map: Dict[int, List[Tuple[int]]] = {}
+        lines = output.strip().splitlines()
+        i = 0
+        while i < len(lines):
+            address = self._parse_line_output_address(lines[i])
+            i += 1
+            if address is None:
+                continue
+            info = []
+            while i < len(lines):
+                if self.with_function_name:
+                    if i + 1 == len(lines):
+                        break
+                    function_name = lines[i].strip()
+                    if not function_name and (':' not in lines[i+1]):
+                        # no more frames
+                        break
+                    i += 1
+                elif not lines[i]:
+                    i += 1
+                    break
+
+                file_path, line_number = self._parse_line_output_source_location(lines[i])
+                i += 1
+                if not file_path or not line_number:
+                    # An addr can have a list of (file, line), when the addr belongs to an inlined
+                    # function. Sometimes only part of the list has ? mark. In this case, we think
+                    # the line info is valid if the first line doesn't have ? mark.
+                    if not info:
+                        break
+                    continue
+                file_id = dso.get_file_id(file_path)
+                if self.with_function_name:
+                    func_id = dso.get_func_id(function_name)
+                    info.append((file_id, line_number, func_id))
+                else:
+                    info.append((file_id, line_number))
+            if info:
+                addr_map[address] = info
+        return addr_map
+
+    def _parse_line_output_address(self, output: str) -> Optional[int]:
+        if output.startswith('0x'):
+            return int(output, 16)
+        return None
+
+    def _parse_line_output_source_location(self, line: str) -> Tuple[Optional[str], Optional[int]]:
         file_path, line_number = None, None
         # Handle lines in format filename:line:column, like "runtest/two_functions.cpp:14:25".
         # Filename may contain ':' like "C:\Users\...\file".
@@ -823,14 +809,9 @@ class Objdump(object):
         real_path, arch = dso_info
         objdump_path = self.objdump_paths.get(arch)
         if not objdump_path:
-            if arch == 'arm':
-                # llvm-objdump for arm is not good at showing branch targets.
-                # So still prefer objdump.
-                objdump_path = ToolFinder.find_tool_path('objdump', self.ndk_path, arch)
+            objdump_path = ToolFinder.find_tool_path('llvm-objdump', self.ndk_path, arch)
             if not objdump_path:
-                objdump_path = ToolFinder.find_tool_path('llvm-objdump', self.ndk_path, arch)
-            if not objdump_path:
-                log_exit("Can't find llvm-objdump. Please set ndk path with --ndk_path option.")
+                log_exit("Can't find llvm-objdump." + NDK_ERROR_MESSAGE)
             self.objdump_paths[arch] = objdump_path
 
         # 3. Run objdump.
@@ -867,7 +848,7 @@ class ReadElf(object):
     def __init__(self, ndk_path: Optional[str]):
         self.readelf_path = ToolFinder.find_tool_path('llvm-readelf', ndk_path)
         if not self.readelf_path:
-            log_exit("Can't find llvm-readelf. Please set ndk path with --ndk_path option.")
+            log_exit("Can't find llvm-readelf. " + NDK_ERROR_MESSAGE)
 
     @staticmethod
     def is_elf_file(path: Union[Path, str]) -> bool:
@@ -968,9 +949,53 @@ def extant_file(arg: str) -> str:
     return path
 
 
+def log_fatal(msg: str):
+    raise Exception(msg)
+
+
+def log_exit(msg: str):
+    sys.exit(msg)
+
+
+class LogFormatter(logging.Formatter):
+    """ Use custom logging format. """
+
+    def __init__(self):
+        super().__init__('%(asctime)s [%(levelname)s] (%(filename)s:%(lineno)d) %(message)s')
+
+    def formatTime(self, record, datefmt):
+        return super().formatTime(record, '%H:%M:%S') + ',%03d' % record.msecs
+
+
+class Log:
+    initialized = False
+
+    @classmethod
+    def init(cls, log_level: str = 'info'):
+        assert not cls.initialized
+        cls.initialized = True
+        cls.logger = logging.root
+        cls.logger.setLevel(log_level.upper())
+        handler = logging.StreamHandler()
+        handler.setFormatter(LogFormatter())
+        cls.logger.addHandler(handler)
+
+
 class ArgParseFormatter(
         argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
     pass
 
 
-logging.getLogger().setLevel(logging.DEBUG)
+class BaseArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, formatter_class=ArgParseFormatter)
+
+    def parse_known_args(self, *args, **kwargs):
+        self.add_argument(
+            '--log', choices=['debug', 'info', 'warning'],
+            default='info', help='set log level')
+        namespace, left_args = super().parse_known_args(*args, **kwargs)
+
+        if not Log.initialized:
+            Log.init(namespace.log)
+        return namespace, left_args
