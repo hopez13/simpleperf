@@ -1,3 +1,24 @@
+build 7848450
+record cmd:
+    Add support for new perf ETE files.
+report cmd:
+    Extend --percent-limit to report entries.
+scripts:
+    Add gecko_profile_generator.py, which generates reports for firefox profiler.
+    Add stackcollapse.py, which generates reports to Folded Stacks.
+    Improve support of proguard mapping file.
+    Improve logging.
+    pprof_proto_generator.py:
+        Add thread, threadpool, pid, tid labels.
+        Set units of common events.
+        Add comments.
+    app_profiler.py: Kill app process for current user.
+    report_sample.py: add --header and --comm options.
+doc:
+    Add introduction slide.
+    Use auto-generated tables of contents.
+test: Fix flaky tests.
+
 
 build 7649958
 Build arm simpleperf for armv7-neon instead of armv8.
