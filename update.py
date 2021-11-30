@@ -206,6 +206,7 @@ def unzip_simpleperf_scripts(zip_path: str):
             shutil.move(sub_path, '.')
     remove('scripts')
     remove('inferno/Android.bp')
+    remove('CONTRIBUTING.md')
 
     # Build testdata.
     testdata_dir = Path('test/testdata')
