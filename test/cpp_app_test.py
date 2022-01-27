@@ -93,7 +93,7 @@ class TestExampleCppTraceOffCpu(TestExampleBase):
         cls.prepare("SimpleperfExampleCpp", "simpleperf.example.cpp", ".SleepActivity")
 
     def test_smoke(self):
-        self.run_app_profiler(record_arg="-g -f 1000 --duration 10 -e cpu-cycles:u --trace-offcpu")
+        self.run_app_profiler(record_arg="-g -f 1000 --duration 10 -e cpu-clock:u --trace-offcpu")
         self.run_cmd(["report.py", "-g", "--comms", "SleepThread", "-o", "report.txt"])
         self.check_strings_in_file("report.txt", [
             "SleepThread(void*)",
@@ -107,7 +107,8 @@ class TestExampleCppTraceOffCpu(TestExampleBase):
             TestHelper.log('Skip annotation test on x86 for kernel < 4.19.')
             return
         remove("annotated_files")
-        self.run_cmd(["annotate.py", "-s", self.example_path, "--comm", "SleepThread"])
+        self.run_cmd(["annotate.py", "-s", self.example_path, "--comm",
+                      "SleepThread", '--summary-width', '1000'])
         self.check_exist(dirname="annotated_files")
         self.check_file_under_dir("annotated_files", "native-lib.cpp")
         summary_file = os.path.join("annotated_files", "summary")
@@ -140,7 +141,8 @@ class TestExampleCppJniCall(TestExampleBase):
             "simpleperf.example.cpp.MixActivity$1.run",
             "Java_simpleperf_example_cpp_MixActivity_callFunction"])
         remove("annotated_files")
-        self.run_cmd(["annotate.py", "-s", self.example_path, "--comm", "BusyThread"])
+        self.run_cmd(["annotate.py", "-s", self.example_path, "--comm",
+                      "BusyThread", '--summary-width', '1000'])
         self.check_exist(dirname="annotated_files")
         self.check_file_under_dir("annotated_files", "native-lib.cpp")
         summary_file = os.path.join("annotated_files", "summary")

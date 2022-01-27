@@ -239,6 +239,16 @@ $ simpleperf report-sample --protobuf --show-callchain -i perf.data -o perf.trac
 # Then open perf.trace in Android Studio to show it.
 ```
 
+## Deobfuscate Java symbols
+
+Java symbols may be obfuscated by ProGuard. To restore the original symbols in a report, we can
+pass a Proguard mapping file to the report scripts or report-sample command via
+`--proguard-mapping-file`.
+
+```sh
+$ ./report_html.py --proguard-mapping-file proguard_mapping_file.txt
+```
+
 ## Record both on CPU time and off CPU time
 
 We can [record both on CPU time and off CPU time](executable_commands_reference.md#record-both-on-cpu-time-and-off-cpu-time).
@@ -280,8 +290,10 @@ $ ./app_profiler.py -p simpleperf.example.cpp
 
 Simpleperf supports controlling recording from application code. Below is the workflow:
 
-1. Run `api_profiler.py prepare` to enable simpleperf recording on a device. The script needs to run
-   every time the device reboots.
+1. Run `api_profiler.py prepare -p <package_name>` to allow an app recording itself using
+   simpleperf. By default, the permission is reset after device reboot. So we need to run the
+   script every time the device reboots. But on Android >= 13, we can use `--days` options to
+   set how long we want the permission to last.
 
 2. Link simpleperf app_api code in the application. The app needs to be debuggable or
    profileableFromShell as described [here](#prepare-an-android-application). Then the app can

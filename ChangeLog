@@ -1,3 +1,15 @@
+build 8121221
+1. On Android >= 13, allow an app profiling itself even after device reboot.
+   The permission expiration time can be set by --days in api_profiler.py.
+2. Improve --trace-offcpu in record cmd to support multiple report modes: pure on cpu samples,
+   pure on-cpu samples, or both on-cpu and off-cpu samples.
+3. Add --add-counter in record cmd to add additional event counts in samples.
+4. Add --filter-file in report cmds and scripts to filter samples based on timestamps.
+5. On Android >= 13, add boot-record cmd to record boot-time profiles on userdebug/eng devices.
+6. For AutoFDO/ETM support, support multiple input files in inject cmd to speed up processing and
+   combine output.
+
+
 build 7848450
 record cmd:
     Add support for new perf ETE files.
