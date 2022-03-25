@@ -1,4 +1,9 @@
-build 8121221
+build 8355685 (March 25, 2022)
+1. Add doc for getting boot-time profile, add doc view_the_profile.md.
+2. Share report lib options between scripts.
+
+
+build 8121221 (Jan 26, 2022)
 1. On Android >= 13, allow an app profiling itself even after device reboot.
    The permission expiration time can be set by --days in api_profiler.py.
 2. Improve --trace-offcpu in record cmd to support multiple report modes: pure on cpu samples,
