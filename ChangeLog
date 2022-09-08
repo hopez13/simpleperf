@@ -1,3 +1,10 @@
+build 9042912 (Sep 8, 2022)
+Fix adhoc codesign for darwin binaries.
+Release protobuf files in proto directory.
+stat cmd: Update to work with CPU cores having different numbers of PMU counters.
+doc: Update collect_etm_data_for_autofdo.md.
+
+
 build 8355685 (March 25, 2022)
 1. Add doc for getting boot-time profile, add doc view_the_profile.md.
 2. Share report lib options between scripts.
