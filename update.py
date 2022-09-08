@@ -145,7 +145,7 @@ def commit(branch, build, add_paths):
 def list_prebuilts() -> List[str]:
     """List all prebuilts in current directory."""
     result = []
-    for d in ['app_api', 'bin', 'doc', 'inferno', 'purgatorio', 'test', 'testdata']:
+    for d in ['app_api', 'bin', 'doc', 'inferno', 'proto', 'purgatorio', 'test', 'testdata']:
         if os.path.isdir(d):
             result.append(d)
     result += glob.glob('*.py') + glob.glob('*.js')
@@ -208,6 +208,13 @@ def unzip_simpleperf_scripts(zip_path: str):
     remove('inferno/Android.bp')
     remove('CONTRIBUTING.md')
 
+    # Move proto files.
+    proto_dir = Path('proto')
+    proto_dir.mkdir()
+    for sub_path in Path.cwd().iterdir():
+        if sub_path.suffix == '.proto':
+            shutil.move(sub_path, proto_dir)
+
     # Build testdata.
     testdata_dir = Path('test/testdata')
     testdata_dir.mkdir()
@@ -216,6 +223,7 @@ def unzip_simpleperf_scripts(zip_path: str):
             shutil.move(sub_path, testdata_dir)
         remove(source_dir)
     remove(testdata_dir / 'Android.bp')
+
 
 def install_repo_prop(branch, build):
     """Installs the repo.prop from the build for auditing."""
