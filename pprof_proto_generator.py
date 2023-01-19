@@ -36,7 +36,8 @@ from simpleperf_utils import (Addr2Nearestline, BaseArgumentParser, BinaryFinder
 try:
     import profile_pb2
 except ImportError:
-    log_exit('google.protobuf module is missing. Please install it first.')
+    log_exit(f'{e}\nprotobuf package is missing or too old. Please install it like ' +
+             '`pip install protobuf==4.21`.')
 
 
 # Some units of common event names
