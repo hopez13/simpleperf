@@ -1,3 +1,25 @@
+build 9796343 (March 22, 2023)
+Fix dozens of security bugs detected by fuzzer.
+record cmd:
+  Increase the default user buffer size from 64M to 256M for devices having >= 4G memory. This is
+  to reduce lost samples and incomplete callchains.
+  Add --user-buffer-size to adjust the user buffer size.
+record/stat cmd:
+  Support using process name regex to select processes via the -p option.
+  Raise file desciptors limit to better support "stat --per-thread -a".
+report:
+  Support demangling rust symbols.
+  Suppress read symbol warnings for not-ELF files.
+  Improve deobfuscating Java symbols (ndk issue 1836).
+  In report scripts, add --aggregate-threads to merge samples for selected threads.
+  In binary_cache_builder.py, support searching for binaries having different names from those
+  recorded in perf.data. Also fix a bug supporting native libs embedded in apk.
+  In gecko_profile_generator.py, remove small stack gaps to get a smoother view in Stack Chart.
+doc:
+  Update doc on the broken DWARF call graph issue.
+  Add doc for trying the latest simpleperf builds and scripts.
+
+
 build 9042912 (Sep 8, 2022)
 Fix adhoc codesign for darwin binaries.
 Release protobuf files in proto directory.
