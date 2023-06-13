@@ -202,7 +202,7 @@ def unzip_simpleperf_scripts(zip_path: str):
 
     # Move scripts.
     for sub_path in Path('scripts').iterdir():
-        if sub_path.name not in ['bin', 'pylintrc', 'update.py']:
+        if sub_path.name not in ['bin', 'pylintrc', 'update.py', 'Android.bp']:
             shutil.move(sub_path, '.')
     remove('scripts')
     remove('inferno/Android.bp')

@@ -40,8 +40,22 @@
         ]
       },
       {
+        "color": "blue",
+        "name": "Off-CPU",
+        "subcategories": [
+          "Other"
+        ]
+      },
+      {
         "color": "grey",
         "name": "Other",
+        "subcategories": [
+          "Other"
+        ]
+      },
+      {
+        "color": "green",
+        "name": "JIT",
         "subcategories": [
           "Other"
         ]
