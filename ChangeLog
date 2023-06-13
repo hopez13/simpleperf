@@ -1,3 +1,13 @@
+build 10306210 (Jun 12, 2023)
+record cmd: Add --decode-etm to decode ETM data while recording.
+            It saves the space storing raw ETM data.
+            Store lost/cut record info in recording file.
+            Report lost samples in kernel space and user space.
+inject cmd: Accept missing aux data.
+            Add build id in AutoFDO output.
+gecko_profile_generatory.py: color off-cpu frames blue and jit app cache frames green.
+
+
 build 9796343 (March 22, 2023)
 Fix dozens of security bugs detected by fuzzer.
 record cmd:
