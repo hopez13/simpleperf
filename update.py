@@ -43,27 +43,27 @@ MINGW = 'local:../../prebuilts/gcc/linux-x86/host/x86_64-w64-mingw32-4.8/x86_64-
 bin_install_list = [
     # simpleperf on device.
     InstallEntry('MODULES-IN-system-extras-simpleperf',
-                 'simpleperf/android/arm64/simpleperf_ndk64',
+                 'simpleperf/android/arm64/simpleperf_ndk',
                  'android/arm64/simpleperf'),
     InstallEntry('MODULES-IN-system-extras-simpleperf_arm',
-                 'simpleperf/android/arm/simpleperf_ndk',
+                 'simpleperf/android/arm/simpleperf_ndk32',
                  'android/arm/simpleperf'),
     InstallEntry('MODULES-IN-system-extras-simpleperf_x86',
-                 'simpleperf/android/x86_64/simpleperf_ndk64',
+                 'simpleperf/android/x86_64/simpleperf_ndk',
                  'android/x86_64/simpleperf'),
     InstallEntry('MODULES-IN-system-extras-simpleperf_x86',
-                 'simpleperf/android/x86/simpleperf_ndk',
+                 'simpleperf/android/x86/simpleperf_ndk32',
                  'android/x86/simpleperf'),
 
     # simpleperf on host. Linux and macOS are 64-bit only these days.
     InstallEntry('MODULES-IN-system-extras-simpleperf',
-                 'simpleperf/linux/x86_64/simpleperf_ndk64',
+                 'simpleperf/linux/x86_64/simpleperf',
                  'linux/x86_64/simpleperf', True),
     InstallEntry('MODULES-IN-system-extras-simpleperf_mac',
-                 'simpleperf/darwin/x86_64/simpleperf_ndk64',
+                 'simpleperf/darwin/x86_64/simpleperf',
                  'darwin/x86_64/simpleperf'),
     InstallEntry('MODULES-IN-system-extras-simpleperf',
-                 'simpleperf/windows/x86_64/simpleperf_ndk64.exe',
+                 'simpleperf/windows/x86_64/simpleperf.exe',
                  'windows/x86_64/simpleperf.exe', True),
 
     # libsimpleperf_report.so on host
