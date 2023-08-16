@@ -1,3 +1,9 @@
+build 10661963 (Aug 16, 2023)
+report-sample command: Remove small stack gaps to get a smoother view in Stack Chart.
+Use prebult libsimpleperf_readelf (provided by Android clang prebuilts) for reading ELF files.
+report_html.py: Speed up disassembling many functions in a binary.
+
+
 build 10306210 (Jun 12, 2023)
 record cmd: Add --decode-etm to decode ETM data while recording.
             It saves the space storing raw ETM data.
