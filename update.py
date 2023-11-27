@@ -54,6 +54,9 @@ bin_install_list = [
     InstallEntry('MODULES-IN-system-extras-simpleperf_x86',
                  'simpleperf/android/x86/simpleperf_ndk32',
                  'android/x86/simpleperf'),
+    InstallEntry('MODULES-IN-system-extras-simpleperf_riscv64',
+                 'simpleperf_ndk',
+                 'android/riscv64/simpleperf'),
 
     # simpleperf on host. Linux and macOS are 64-bit only these days.
     InstallEntry('MODULES-IN-system-extras-simpleperf',
